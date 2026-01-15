@@ -6,14 +6,14 @@ import config
 
 logger = logging.getLogger(__name__)
 
-# Используем те же SCOPES, но для gspread
+# Используем стандартные права доступа
 SCOPES = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
-class GoogleSheetsReader:
+class GoogleSheetsManager:
     
     def __init__(self):
         self.client = None
@@ -22,67 +22,68 @@ class GoogleSheetsReader:
 
     def _authenticate(self):
         """
-        Аутентификация аналогична vnxMATRIX, но адаптирована под библиотеку gspread
+        Аутентификация. Пытаемся взять JSON из конфига (как в Matrix),
+        если нет - ищем файл keys.json.
         """
         try:
-            # Пытаемся загрузить ключи из переменной окружения (как в Matrix)
             if config.GOOGLE_CREDENTIALS_JSON:
+                # Загружаем из переменной окружения (String -> Dict)
                 creds_dict = json.loads(config.GOOGLE_CREDENTIALS_JSON)
                 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPES)
             else:
-                # Резервный вариант: файл keys.json
+                # Резерв: загружаем из файла
                 creds = ServiceAccountCredentials.from_json_keyfile_name("keys.json", SCOPES)
 
             self.client = gspread.authorize(creds)
             logger.info("✅ ORACLE: Google Sheets Connected")
             
         except Exception as e:
+            # Логируем ошибку, но не роняем бота сразу
             logger.error(f"❌ ORACLE Auth Error: {e}")
 
     # ==========================================================================
-    # 1. ЛОГИКА ДОСТУПА (Чтение Clients)
+    # 1. ЛОГИКА ПРОВЕРКИ ДОСТУПА (READ ONLY)
     # ==========================================================================
 
-    def check_access(self, tg_id):
+    def check_ai_access(self, tg_id):
         """
-        Проверяет, активна ли подписка на AI у пользователя.
-        Ищет пользователя по TG ID и проверяет колонку 'AI_Access' (или 'Oracle_Status').
+        Проверяет, есть ли у пользователя статус Active в колонке AI_Access.
+        Использует лист 'Clients'.
         """
+        # Если соединение потеряно, пробуем восстановить
         if not self.client: 
             self._authenticate()
             if not self.client: return False
 
         try:
-            # Открываем таблицу и лист
+            # Открываем таблицу по ID из конфига
             sheet = self.client.open_by_key(self.sheet_id)
             worksheet = sheet.worksheet("Clients")
             
-            # Получаем все записи (это быстро для чтения)
-            # gspread возвращает список словарей, где ключи - заголовки столбцов
+            # Получаем все записи. gspread возвращает список словарей.
+            # Это позволяет обращаться по именам колонок: row['AI_Access']
             records = worksheet.get_all_records()
             
             target_id = str(tg_id).strip()
             
-            # Ищем пользователя (аналог find_client_by_tg_id)
-            # Перебираем с конца, чтобы найти актуальный статус
+            # Ищем с конца (reversed), чтобы найти самую свежую запись клиента
             for row in reversed(records):
-                # Проверяем совпадение ID (ключ 'tg_id' должен совпадать с заголовком в таблице!)
+                # Приводим ID из таблицы к строке и сравниваем
                 if str(row.get('tg_id', '')).strip() == target_id:
                     
-                    # Проверяем колонку доступа к ИИ
-                    # ВАЖНО: В таблице должен быть заголовок 'AI_Access'
-                    ai_status = row.get('AI_Access', '').strip()
+                    # Ищем колонку AI_Access. 
+                    # Если такой колонки нет, get вернет пустую строку.
+                    ai_status = str(row.get('AI_Access', '')).strip()
                     
                     if ai_status == 'Active':
                         return True
                     else:
-                        # Если нашли пользователя, но статус не Active - доступ закрыт
+                        # Клиент найден, но статус не Active
                         return False
             
-            # Если пользователь вообще не найден в таблице
+            # Клиент вообще не найден в таблице
             return False
 
         except Exception as e:
             logger.error(f"❌ Check Access Error: {e}")
-            # При ошибке базы лучше запретить доступ, чтобы не тратить токены
             return False
