@@ -142,6 +142,22 @@ class Database:
         except Exception:
             return []
 
+    # ... (Весь код тот же, добавляем этот метод в класс Database) ...
+
+    def delete_session(self, user_id, session_id):
+        """Удаляет сессию и все сообщения в ней"""
+        try:
+            cursor = self.conn.cursor()
+            # 1. Удаляем сообщения этой сессии
+            cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+            # 2. Удаляем саму сессию (только если она принадлежит этому юзеру)
+            cursor.execute("DELETE FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"DB Delete Session Error: {e}")
+            return False
+
     # --- УПРАВЛЕНИЕ СООБЩЕНИЯМИ ---
 
     def add_message(self, session_id, role, content, model=""):
