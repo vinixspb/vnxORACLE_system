@@ -27,14 +27,24 @@ try:
 except Exception as e:
     logger.critical(f"❌ Init Error: {e}")
 
-# --- UI: ГЛАВНАЯ КЛАВИАТУРА (5 кнопок) ---
+# --- UI: ГЛАВНАЯ КЛАВИАТУРА ---
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_HISTORY)],
-        [KeyboardButton(config.BTN_PROFILE), KeyboardButton(config.BTN_HELP)],
-        [KeyboardButton(config.BTN_CHANGE_MODEL)] # Пятая кнопка внизу
+        [KeyboardButton(config.BTN_PROFILE), KeyboardButton(config.BTN_TARIFFS)],
+        [KeyboardButton(config.BTN_CHANGE_MODEL), KeyboardButton(config.BTN_HELP)] # <-- Добавили Поддержку сюда
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+# --- UI: МЕНЮ ПОКУПКИ (Цены обновлены) ---
+def get_subscription_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("🟢 START (390₽)", callback_data="buy_START")],
+        [InlineKeyboardButton("🟡 PRO (990₽)", callback_data="buy_PRO")],
+        [InlineKeyboardButton("🔴 NEO (1490₽)", callback_data="buy_NEO")],
+        [InlineKeyboardButton("👨‍💻 Связь с Архитектором", url="https://t.me/vinixspb")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 # --- ЛОГИКА ---
 
@@ -42,146 +52,176 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"👤 Start: {user.id}")
 
-    if not sheets_mgr.check_ai_access(user.id):
-        await update.message.reply_text("⛔️ <b>ДОСТУП ЗАПРЕЩЕН</b>\nНет активной подписки.", parse_mode='HTML')
+    # Проверяем тариф
+    tariff = sheets_mgr.get_user_tariff(user.id)
+
+    # 1. Если тарифа НЕТ (None)
+    if not tariff:
+        # Показываем Приветствие (Рекламу) + Меню покупки
+        await update.message.reply_text(config.MSG_WELCOME, parse_mode='HTML')
+        await update.message.reply_text(config.MSG_NO_SUB, reply_markup=get_subscription_keyboard(), parse_mode='HTML')
         return
 
-    # При старте создаем новую сессию
+    # 2. Если тариф ЕСТЬ -> Строго твой текст
     db.create_session(user.id, title="Новая сессия")
     
-    await update.message.reply_text(config.MSG_WELCOME, reply_markup=get_main_keyboard(), parse_mode='HTML')
+    msg_granted = (
+        "👁 <b>Доступ разрешен.</b>\n"
+        f"Ваш уровень: <b>{tariff}</b>\n\n"
+        "Добро пожаловать в систему."
+    )
+    
+    await update.message.reply_text(
+        msg_granted,
+        reply_markup=get_main_keyboard(),
+        parse_mode='HTML'
+    )
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text
     user_id = user.id
 
-    # --- 1. СИСТЕМНЫЕ КНОПКИ ---
+    user_tariff = sheets_mgr.get_user_tariff(user_id)
+
+    # --- СИСТЕМНЫЕ КНОПКИ ---
 
     if text == config.BTN_NEW_DIALOG:
+        if not user_tariff: return await send_paywall(update)
         db.create_session(user_id, title="Новый диалог")
-        await update.message.reply_text("♻️ <b>Новый чат создан.</b>\nКонтекст сброшен. О чем поговорим?", parse_mode='HTML')
+        await update.message.reply_text("♻️ <b>Новый чат создан.</b>", parse_mode='HTML')
         return
 
     if text == config.BTN_HISTORY:
-        # Достаем последние 10 сессий
+        if not user_tariff: return await send_paywall(update)
         sessions = db.get_user_sessions(user_id, limit=10)
-        
         if not sessions:
             await update.message.reply_text("📂 Архив пуст.")
         else:
-            # СОЗДАЕМ ИНЛАЙН КНОПКИ
             keyboard_buttons = []
             for s in sessions:
-                # Дата: 2024-01-01 12:00
-                date_short = s['created_at'][5:16] # mm-dd HH:MM
+                date_short = s['created_at'][5:16]
                 btn_text = f"{s['title']} ({date_short})"
-                # callback_data: 'session_123'
                 keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"session_{s['id']}")])
-            
             markup = InlineKeyboardMarkup(keyboard_buttons)
-            await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>\nНажми, чтобы продолжить диалог:", reply_markup=markup, parse_mode='HTML')
+            await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
         return
 
     if text == config.BTN_PROFILE:
-        access = sheets_mgr.check_ai_access(user_id)
-        status = "✅ ACTIVE" if access else "❌ INACTIVE"
+        status = f"✅ {user_tariff}" if user_tariff else "❌ NO ACCESS"
+        limit = config.LIMITS.get(user_tariff, 0) if user_tariff else 0
         await update.message.reply_text(
-            f"👤 <b>ПРОФИЛЬ</b>\nID: <code>{user_id}</code>\nStatus: <b>{status}</b>\nModel: {config.DEFAULT_MODEL}", 
+            f"👤 <b>ПРОФИЛЬ</b>\nID: <code>{user_id}</code>\nStatus: <b>{status}</b>\nПамять: {limit} msg\nModel: {config.DEFAULT_MODEL}", 
             parse_mode='HTML'
         )
         return
     
-    if text == config.BTN_CHANGE_MODEL:
-        await update.message.reply_text("🧠 Выбор моделей доступен в версии PRO.", parse_mode='HTML')
+    if text == config.BTN_TARIFFS:
+        await update.message.reply_text(
+            "💳 <b>ВЫБОР УРОВНЯ ДОСТУПА</b>\nВыберите тариф для подключения или апгрейда:",
+            reply_markup=get_subscription_keyboard(),
+            parse_mode='HTML'
+        )
         return
 
+    # Логика кнопки ПОДДЕРЖКА
     if text == config.BTN_HELP:
-        await update.message.reply_text("🆘 <b>ПОМОЩЬ</b>\n\nЯ помню контекст. Чтобы сменить тему, нажми 'НОВЫЙ ЧАТ'.\nЧтобы вернуться к старой теме, нажми 'ИСТОРИЯ ЧАТОВ'.", parse_mode='HTML')
+        await update.message.reply_text(
+            "🆘 <b>ПОДДЕРЖКА АРХИТЕКТОРА</b>\n\n"
+            "Если возникли сбои в Матрице или вопросы по оплате:\n"
+            "👨‍💻 @vinixspb",
+            parse_mode='HTML'
+        )
         return
 
-    # --- 2. ОБЩЕНИЕ С ИИ ---
-    
-    if not sheets_mgr.check_ai_access(user_id):
-        await update.message.reply_text("⛔️ Подписка не активна.")
+    if text == config.BTN_CHANGE_MODEL:
+        if not user_tariff: return await send_paywall(update)
+        if user_tariff == "START":
+            await update.message.reply_text(f"🔒 Смена моделей доступна на тарифах <b>PRO</b> и <b>NEO</b>.\nУ вас: {user_tariff}", parse_mode='HTML')
+        else:
+             await update.message.reply_text("🧠 <b>ВЫБОР МОДЕЛИ:</b>\n(Функционал в разработке)", parse_mode='HTML')
         return
+
+    # --- AI ---
+    
+    if not user_tariff:
+        return await send_paywall(update)
 
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
 
-    # 1. Получаем ID АКТИВНОЙ сессии (это и решает проблему потери контекста)
     session_id = db.get_active_session(user_id)
-
-    # 2. Если чат новый, называем его по первому сообщению
     history = db.get_history(session_id, limit=5)
     if not history:
         db.update_session_title(session_id, text)
-
-    # 3. Пишем в базу
     db.add_message(session_id, "user", text)
 
-    # 4. Формируем контекст
-    full_context = db.get_history(session_id, limit=config.LIMITS["START"])
+    history_depth = config.LIMITS.get(user_tariff, 10)
+    full_context = db.get_history(session_id, limit=history_depth)
 
     try:
         ai_response = await ai_engine.get_response(full_context, config.DEFAULT_MODEL)
-        
-        # 5. Сохраняем ответ
         db.add_message(session_id, "assistant", ai_response, model=config.DEFAULT_MODEL)
-
-        # 6. Отправляем
         final_text = f"{ai_response}\n\n⚙️ <i>Model: {config.DEFAULT_MODEL}</i>"
         try:
             await update.message.reply_text(final_text, parse_mode='Markdown')
         except:
             await update.message.reply_text(final_text, parse_mode='HTML')
-
     except Exception as e:
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка связи.")
 
-# --- ОБРАБОТЧИК НАЖАТИЙ НА ИСТОРИЮ (INLINE) ---
+async def send_paywall(update: Update):
+    await update.message.reply_text(config.MSG_NO_SUB, reply_markup=get_subscription_keyboard(), parse_mode='HTML')
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    await query.answer() # Чтобы кружок загрузки пропал
+    await query.answer()
 
     data = query.data
-    if data.startswith("session_"):
-        # Извлекаем ID: session_5 -> 5
-        session_id = int(data.split("_")[1])
+    
+    if data.startswith("buy_"):
+        plan = data.split("_")[1]
+        info = config.TARIFF_INFO.get(plan, "Error")
         
-        # Переключаем активную сессию в базе
-        success = db.activate_session(user_id, session_id)
+        pay_btn = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"💸 Оплатить {plan}", url=config.LINK_GATEWAY)],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_tariffs")]
+        ])
         
-        if success:
-            title = db.get_session_title(session_id)
-            await query.message.reply_text(f"📂 <b>Чат загружен:</b> {title}\nКонтекст восстановлен. Можете продолжать.", parse_mode='HTML')
-        else:
-            await query.message.reply_text("⚠️ Ошибка восстановления чата.")
-
-# --- УСТАНОВКА МЕНЮ (СЛЕВА) ---
-async def post_init(application: Application):
-    """Устанавливает кнопку Menu"""
-    await application.bot.set_my_commands([
-        BotCommand("start", "Главное Меню")
-    ])
-
-# --- ЗАПУСК ---
-def main():
-    if not config.BOT_TOKEN_ORACLE:
+        await query.edit_message_text(
+            f"{info}\n\n<i>Для оплаты вы будете перенаправлены в платежный шлюз.</i>",
+            reply_markup=pay_btn,
+            parse_mode='HTML'
+        )
         return
+
+    if data == "back_to_tariffs":
+        await query.edit_message_text(
+            "💳 <b>ВЫБОР УРОВНЯ ДОСТУПА</b>",
+            reply_markup=get_subscription_keyboard(),
+            parse_mode='HTML'
+        )
+        return
+
+    if data.startswith("session_"):
+        session_id = int(data.split("_")[1])
+        if db.activate_session(user_id, session_id):
+            title = db.get_session_title(session_id)
+            await query.message.reply_text(f"📂 <b>Чат загружен:</b> {title}", parse_mode='HTML')
+        else:
+            await query.message.reply_text("⚠️ Ошибка.")
+
+async def post_init(application: Application):
+    await application.bot.set_my_commands([BotCommand("start", "Главное Меню")])
+
+def main():
+    if not config.BOT_TOKEN_ORACLE: return
     logger.info("👁 vnxORACLE: ONLINE")
-    
-    # post_init нужен для установки кнопки Меню
     app = Application.builder().token(config.BOT_TOKEN_ORACLE).post_init(post_init).build()
-    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    
-    # Добавляем обработчик для Инлайн-кнопок
     app.add_handler(CallbackQueryHandler(handle_callback))
-    
     app.run_polling()
 
 if __name__ == '__main__':
