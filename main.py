@@ -10,13 +10,12 @@ from services.sheets_manager import GoogleSheetsManager
 from services.ai_engine import AIEngine
 
 # =========================================================
-# 🔧 НАСТРОЙКА ЛОГИРОВАНИЯ (Как в старом файле + дополнения)
+# 🔧 НАСТРОЙКА ЛОГИРОВАНИЯ
 # =========================================================
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-# Убираем шум от библиотек (из твоего старого кода)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("googleapiclient").setLevel(logging.WARNING)
@@ -26,7 +25,6 @@ logger = logging.getLogger(__name__)
 # =========================================================
 # 🚀 ИНИЦИАЛИЗАЦИЯ СЕРВИСОВ
 # =========================================================
-# Запускаем "двигатели" один раз при старте
 try:
     sheets_mgr = GoogleSheetsManager()
     ai_engine = AIEngine()
@@ -34,15 +32,13 @@ try:
 except Exception as e:
     logger.critical(f"❌ Critical Error initializing services: {e}")
 
-# ОПЕРАТИВНАЯ ПАМЯТЬ (RAM)
-# Хранит историю диалога: {user_id: [сообщения...]}
+# ОПЕРАТИВНАЯ ПАМЯТЬ
 user_contexts = {}
 
 # =========================================================
 # 🎹 ИНТЕРФЕЙС (UI)
 # =========================================================
 def get_main_keyboard():
-    """Создает клавиатуру из кнопок в конфиге"""
     keyboard = [
         [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_CHANGE_MODEL)],
         [KeyboardButton(config.BTN_PROFILE), KeyboardButton(config.BTN_HELP)]
@@ -54,16 +50,12 @@ def get_main_keyboard():
 # =========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Приветствие Оракула.
-    Проверяет подписку перед тем, как поздороваться.
-    """
+    """Приветствие Оракула"""
     user = update.effective_user
     logger.info(f"👤 User {user.id} ({user.username}) initiated session.")
 
-    # 1. Проверка доступа через Таблицу
-    # Если юзера нет в Clients или у него не стоит Active - не пускаем
-   if not sheets_mgr.check_ai_access(user.id):
+    # 1. Проверка доступа
+    if not sheets_mgr.check_ai_access(user.id):
         logger.warning(f"⛔️ Access DENIED for {user.id}")
         await update.message.reply_text(
             "⛔️ <b>ДОСТУП ЗАПРЕЩЕН</b>\n\n"
@@ -73,10 +65,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2. Если доступ есть - сбрасываем старую память
+    # 2. Сброс памяти
     user_contexts[user.id] = []
 
-    # 3. Отправляем приветствие с КНОПКАМИ
+    # 3. Приветствие
     await update.message.reply_text(
         config.MSG_WELCOME,
         reply_markup=get_main_keyboard(),
@@ -84,22 +76,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Главный мозг. Обрабатывает текст и кнопки.
-    """
+    """Главный мозг"""
     user = update.effective_user
     text = update.message.text
     user_id = user.id
 
-    # --- 1. ОБРАБОТКА СИСТЕМНЫХ КНОПОК ---
-
+    # --- СИСТЕМНЫЕ КНОПКИ ---
     if text == config.BTN_NEW_DIALOG:
         user_contexts[user_id] = []
         await update.message.reply_text("⚡️ <b>Память очищена.</b> Жду новый запрос.", parse_mode='HTML')
         return
 
     if text == config.BTN_PROFILE:
-        # Проверяем статус в реальном времени
         access = sheets_mgr.check_ai_access(user_id)
         status_icon = "✅ ACTIVE" if access else "❌ INACTIVE"
         await update.message.reply_text(
@@ -114,64 +102,56 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == config.BTN_HELP:
         await update.message.reply_text(
             "💾 <b>СПРАВКА</b>\n\n"
-            "Я использую контекстную память (последние 20 сообщений).\n"
-            "Если я начал терять нить разговора — нажми <b>НОВЫЙ ДИАЛОГ</b>.",
+            "Я помню контекст последних 20 сообщений.\n"
+            "Чтобы сменить тему, нажми <b>НОВЫЙ ДИАЛОГ</b>.",
             parse_mode='HTML'
         )
         return
-    
+
     if text == config.BTN_CHANGE_MODEL:
         await update.message.reply_text("🧠 Выбор моделей доступен в версии PRO.", parse_mode='HTML')
         return
 
-    # --- 2. ОБРАБОТКА ЗАПРОСА К НЕЙРОСЕТИ ---
+    # --- ЗАПРОС К НЕЙРОСЕТИ ---
 
-    # Снова проверяем доступ (на случай, если подписка кончилась 5 минут назад)
-    await update.message.reply_text(
-            "⛔️ <b>ДОСТУП ЗАПРЕЩЕН</b>\n\n"
-            "Ваша подписка на Нейро-модуль не активна.\n"
-            "Для активации обратитесь к Шлюзу: @vnxMATRIX_Gateway_bot",
+    # Проверка доступа перед ответом
+    if not sheets_mgr.check_ai_access(user_id):
+        await update.message.reply_text(
+            "⛔️ <b>ПОДПИСКА НЕ АКТИВНА</b>\n"
+            "Обратитесь в @vnxMATRIX_Gateway_bot",
             parse_mode='HTML'
         )
+        return
 
-    # Показываем "печатает...", пока ИИ думает
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
 
-    # Работа с памятью
     if user_id not in user_contexts:
         user_contexts[user_id] = []
     
-    # Добавляем вопрос пользователя в историю
     user_contexts[user_id].append({"role": "user", "content": text})
 
-    # Ограничиваем историю (чтобы не перегрузить токенами), берем последние 20
     if len(user_contexts[user_id]) > config.MAX_HISTORY_DEPTH:
         user_contexts[user_id] = user_contexts[user_id][-config.MAX_HISTORY_DEPTH:]
 
     try:
-        # Отправляем в ENGINE
         ai_response = await ai_engine.get_response(
             messages=user_contexts[user_id],
             model=config.DEFAULT_MODEL
         )
 
-        # Добавляем ответ бота в историю
         user_contexts[user_id].append({"role": "assistant", "content": ai_response})
 
-        # Отправляем ответ (Markdown для красивого кода)
-        # Try-catch для Markdown, если Телеграм ругается на разметку
         try:
             await update.message.reply_text(ai_response, parse_mode='Markdown')
         except Exception:
-            # Если ошибка разметки - шлем просто текстом
             await update.message.reply_text(ai_response)
 
     except Exception as e:
         logger.error(f"⚠️ AI Handler Error: {e}")
-        await update.message.reply_text("⚠️ Сбой связи с Ноосферой. Попробуйте нажать 'Новый диалог'.")
+        await update.message.reply_text("⚠️ Сбой связи. Нажмите 'Новый диалог'.")
 
 # =========================================================
-# 🏁 ТОЧКА ВХОДА (Main Loop)
+# 🏁 ТОЧКА ВХОДА
 # =========================================================
 def main():
     if not config.BOT_TOKEN_ORACLE:
@@ -181,11 +161,7 @@ def main():
     logger.info("👁 vnxORACLE_system: ONLINE. Listening...")
     
     app = Application.builder().token(config.BOT_TOKEN_ORACLE).build()
-    
-    # Регистрируем хендлеры
     app.add_handler(CommandHandler("start", start))
-    
-    # MessageHandler ловит ТЕКСТ и КНОПКИ (но игнорирует команды /start и т.д.)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
     app.run_polling()
@@ -194,4 +170,4 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        logger.info("🛑 Bot stopped by user (KeyboardInterrupt)")
+        logger.info("🛑 Bot stopped by user")
