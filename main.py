@@ -63,12 +63,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 1. Проверка доступа через Таблицу
     # Если юзера нет в Clients или у него не стоит Active - не пускаем
-    if not sheets_mgr.check_ai_access(user.id):
+   if not sheets_mgr.check_ai_access(user.id):
         logger.warning(f"⛔️ Access DENIED for {user.id}")
         await update.message.reply_text(
             "⛔️ <b>ДОСТУП ЗАПРЕЩЕН</b>\n\n"
             "Ваша подписка на Нейро-модуль не активна.\n"
-            "Для активации обратитесь к Шлюзу: @vnx_gateway_bot",
+            "Для активации обратитесь к Шлюзу: @vnxMATRIX_Gateway_bot",
             parse_mode='HTML'
         )
         return
