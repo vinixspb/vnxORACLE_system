@@ -1,7 +1,7 @@
 import logging
 import asyncio
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from telegram.constants import ChatAction
 
 # --- МОДУЛИ ---
@@ -23,15 +23,16 @@ try:
     sheets_mgr = GoogleSheetsManager()
     ai_engine = AIEngine()
     db = Database()
-    logger.info("✅ Services: Sheets, AI, Database (Sessions) - OK")
+    logger.info("✅ Services OK")
 except Exception as e:
     logger.critical(f"❌ Init Error: {e}")
 
-# --- UI ---
+# --- UI: ГЛАВНАЯ КЛАВИАТУРА (5 кнопок) ---
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_HISTORY)],
-        [KeyboardButton(config.BTN_PROFILE), KeyboardButton(config.BTN_HELP)]
+        [KeyboardButton(config.BTN_PROFILE), KeyboardButton(config.BTN_HELP)],
+        [KeyboardButton(config.BTN_CHANGE_MODEL)] # Пятая кнопка внизу
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -55,29 +56,31 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = user.id
 
-    # --- 1. КНОПКИ МЕНЮ ---
+    # --- 1. СИСТЕМНЫЕ КНОПКИ ---
 
     if text == config.BTN_NEW_DIALOG:
-        # Создаем новую сессию в БД
         db.create_session(user_id, title="Новый диалог")
-        await update.message.reply_text("♻️ <b>Новый чат создан.</b>\nПамять очищена. О чем поговорим?", parse_mode='HTML')
+        await update.message.reply_text("♻️ <b>Новый чат создан.</b>\nКонтекст сброшен. О чем поговорим?", parse_mode='HTML')
         return
 
     if text == config.BTN_HISTORY:
-        # Берем список сессий (пока лимит 10 для всех)
+        # Достаем последние 10 сессий
         sessions = db.get_user_sessions(user_id, limit=10)
         
         if not sessions:
             await update.message.reply_text("📂 Архив пуст.")
         else:
-            msg_text = "<b>💾 АРХИВ ПОСЛЕДНИХ ЧАТОВ:</b>\n\n"
+            # СОЗДАЕМ ИНЛАЙН КНОПКИ
+            keyboard_buttons = []
             for s in sessions:
-                # s['created_at'] это строка времени, можно обрезать до даты
-                date_str = s['created_at'][:16] 
-                msg_text += f"🔹 <b>{s['title']}</b>\n   └ <i>{date_str}</i>\n\n"
+                # Дата: 2024-01-01 12:00
+                date_short = s['created_at'][5:16] # mm-dd HH:MM
+                btn_text = f"{s['title']} ({date_short})"
+                # callback_data: 'session_123'
+                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"session_{s['id']}")])
             
-            msg_text += "<i>Чтобы продолжить старую тему, пока нужно начинать новый диалог. (Функция загрузки в разработке)</i>"
-            await update.message.reply_text(msg_text, parse_mode='HTML')
+            markup = InlineKeyboardMarkup(keyboard_buttons)
+            await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>\nНажми, чтобы продолжить диалог:", reply_markup=markup, parse_mode='HTML')
         return
 
     if text == config.BTN_PROFILE:
@@ -88,16 +91,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
         return
-
-    if text == config.BTN_HELP:
-        await update.message.reply_text("🆘 <b>ПОМОЩЬ</b>\n\nЯ помню контекст внутри текущего чата.\nНажми 'НОВЫЙ ЧАТ', чтобы сменить тему.", parse_mode='HTML')
-        return
     
     if text == config.BTN_CHANGE_MODEL:
         await update.message.reply_text("🧠 Выбор моделей доступен в версии PRO.", parse_mode='HTML')
         return
 
-    # --- 2. ОБРАБОТКА ЗАПРОСА К ИИ ---
+    if text == config.BTN_HELP:
+        await update.message.reply_text("🆘 <b>ПОМОЩЬ</b>\n\nЯ помню контекст. Чтобы сменить тему, нажми 'НОВЫЙ ЧАТ'.\nЧтобы вернуться к старой теме, нажми 'ИСТОРИЯ ЧАТОВ'.", parse_mode='HTML')
+        return
+
+    # --- 2. ОБЩЕНИЕ С ИИ ---
     
     if not sheets_mgr.check_ai_access(user_id):
         await update.message.reply_text("⛔️ Подписка не активна.")
@@ -105,30 +108,28 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
 
-    # 1. Получаем ID текущей сессии
+    # 1. Получаем ID АКТИВНОЙ сессии (это и решает проблему потери контекста)
     session_id = db.get_active_session(user_id)
 
-    # 2. Если это первое сообщение в сессии — переименовываем сессию
+    # 2. Если чат новый, называем его по первому сообщению
     history = db.get_history(session_id, limit=5)
     if not history:
         db.update_session_title(session_id, text)
 
-    # 3. Сохраняем сообщение юзера
+    # 3. Пишем в базу
     db.add_message(session_id, "user", text)
 
-    # 4. Достаем полный контекст для нейросети
+    # 4. Формируем контекст
     full_context = db.get_history(session_id, limit=config.LIMITS["START"])
 
     try:
-        # 5. Запрос к ИИ
         ai_response = await ai_engine.get_response(full_context, config.DEFAULT_MODEL)
-
-        # 6. Сохраняем ответ
+        
+        # 5. Сохраняем ответ
         db.add_message(session_id, "assistant", ai_response, model=config.DEFAULT_MODEL)
 
-        # 7. Формируем красивый ответ с подписью
+        # 6. Отправляем
         final_text = f"{ai_response}\n\n⚙️ <i>Model: {config.DEFAULT_MODEL}</i>"
-
         try:
             await update.message.reply_text(final_text, parse_mode='Markdown')
         except:
@@ -136,16 +137,51 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"AI Error: {e}")
-        await update.message.reply_text("⚠️ Ошибка связи. Попробуйте еще раз.")
+        await update.message.reply_text("⚠️ Ошибка связи.")
+
+# --- ОБРАБОТЧИК НАЖАТИЙ НА ИСТОРИЮ (INLINE) ---
+
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer() # Чтобы кружок загрузки пропал
+
+    data = query.data
+    if data.startswith("session_"):
+        # Извлекаем ID: session_5 -> 5
+        session_id = int(data.split("_")[1])
+        
+        # Переключаем активную сессию в базе
+        success = db.activate_session(user_id, session_id)
+        
+        if success:
+            title = db.get_session_title(session_id)
+            await query.message.reply_text(f"📂 <b>Чат загружен:</b> {title}\nКонтекст восстановлен. Можете продолжать.", parse_mode='HTML')
+        else:
+            await query.message.reply_text("⚠️ Ошибка восстановления чата.")
+
+# --- УСТАНОВКА МЕНЮ (СЛЕВА) ---
+async def post_init(application: Application):
+    """Устанавливает кнопку Menu"""
+    await application.bot.set_my_commands([
+        BotCommand("start", "Главное Меню")
+    ])
 
 # --- ЗАПУСК ---
 def main():
     if not config.BOT_TOKEN_ORACLE:
         return
     logger.info("👁 vnxORACLE: ONLINE")
-    app = Application.builder().token(config.BOT_TOKEN_ORACLE).build()
+    
+    # post_init нужен для установки кнопки Меню
+    app = Application.builder().token(config.BOT_TOKEN_ORACLE).post_init(post_init).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    
+    # Добавляем обработчик для Инлайн-кнопок
+    app.add_handler(CallbackQueryHandler(handle_callback))
+    
     app.run_polling()
 
 if __name__ == '__main__':
