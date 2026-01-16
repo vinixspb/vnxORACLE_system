@@ -12,21 +12,18 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
 # =========================================================
-# ⚙️ МОЗГ И ТАРИФЫ (LIMITS)
+# ⚙️ МОЗГ И ЛИМИТЫ
 # =========================================================
-# Модели
 MODEL_BASIC = "openai/gpt-3.5-turbo"
 MODEL_PRO = "openai/gpt-4o-mini"
 MODEL_NEO = "anthropic/claude-3.5-sonnet"
 
-# По умолчанию (для старта)
 DEFAULT_MODEL = MODEL_BASIC
 
-# Настройки контекста (Сколько сообщений помнить)
 LIMITS = {
-    "START": 10,  # Дешевый тариф
-    "PRO": 30,    # Средний
-    "NEO": 60     # Топ (Matrix Style)
+    "START": 10,
+    "PRO": 30,
+    "NEO": 60
 }
 
 SYSTEM_PROMPT = (
@@ -41,8 +38,8 @@ AI_TEMPERATURE = 0.7
 # =========================================================
 # 🎹 КНОПКИ (UI)
 # =========================================================
-BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"    # <-- Обновили
-BTN_HISTORY = "💾 ИСТОРИЯ"        # <-- Обновили
+BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"
+BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
 BTN_PROFILE = "👤 МОЙ ПРОФИЛЬ"
 BTN_HELP = "🆘 ПОМОЩЬ"
 BTN_CHANGE_MODEL = "🧠 СМЕНИТЬ МОДЕЛЬ"
@@ -50,8 +47,9 @@ BTN_CHANGE_MODEL = "🧠 СМЕНИТЬ МОДЕЛЬ"
 # =========================================================
 # 💬 СООБЩЕНИЯ
 # =========================================================
+# Исправлено: возвращена философия и точная ссылка
 MSG_WELCOME = (
-    "👁 <b>vnxORACLE SYSTEM v1.0</b>\n\n"
+    "👁 <b>vnxORACLE SYSTEM</b>\n\n"
     "Добро пожаловать в систему.\n"
     "Я — интерфейс чистого знания.\n\n"
     "Доступ открыт через шлюз: @vnxMATRIX_Gateway_bot\n"
