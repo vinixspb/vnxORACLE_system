@@ -50,38 +50,29 @@ class GoogleSheetsManager:
         Проверяет, есть ли у пользователя статус Active в колонке AI_Access.
         Использует лист 'Clients'.
         """
-        # Если соединение потеряно, пробуем восстановить
         if not self.client: 
             self._authenticate()
             if not self.client: return False
 
         try:
-            # Открываем таблицу по ID из конфига
             sheet = self.client.open_by_key(self.sheet_id)
             worksheet = sheet.worksheet("Clients")
-            
-            # Получаем все записи. gspread возвращает список словарей.
-            # Это позволяет обращаться по именам колонок: row['AI_Access']
             records = worksheet.get_all_records()
             
             target_id = str(tg_id).strip()
             
-            # Ищем с конца (reversed), чтобы найти самую свежую запись клиента
             for row in reversed(records):
-                # Приводим ID из таблицы к строке и сравниваем
-                if str(row.get('tg_id', '')).strip() == target_id:
-                    
-                    # Ищем колонку AI_Access. 
-                    # Если такой колонки нет, get вернет пустую строку.
+                # !!! ИСПРАВЛЕНИЕ ЗДЕСЬ !!!
+                # Используем 'telegram_id', так как так назван столбец C в таблице
+                row_tg_id = str(row.get('telegram_id', '')).strip()
+                
+                if row_tg_id == target_id:
                     ai_status = str(row.get('AI_Access', '')).strip()
-                    
                     if ai_status == 'Active':
                         return True
                     else:
-                        # Клиент найден, но статус не Active
                         return False
             
-            # Клиент вообще не найден в таблице
             return False
 
         except Exception as e:
