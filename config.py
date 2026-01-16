@@ -1,11 +1,10 @@
 import os
 from dotenv import load_dotenv
 
-# Загрузка секретов
 load_dotenv()
 
 # =========================================================
-# 🔐 СИСТЕМНЫЕ НАСТРОЙКИ (КЛЮЧИ)
+# 🔐 СИСТЕМНЫЕ НАСТРОЙКИ
 # =========================================================
 BOT_TOKEN_ORACLE = os.getenv("BOT_TOKEN_ORACLE")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
@@ -13,10 +12,22 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
 # =========================================================
-# ⚙️ НАСТРОЙКИ НЕЙРОСЕТИ (МОЗГ)
+# ⚙️ МОЗГ И ТАРИФЫ (LIMITS)
 # =========================================================
-# Эти параметры нужны для ai_engine.py
-DEFAULT_MODEL = "openai/gpt-3.5-turbo" 
+# Модели
+MODEL_BASIC = "openai/gpt-3.5-turbo"
+MODEL_PRO = "openai/gpt-4o-mini"
+MODEL_NEO = "anthropic/claude-3.5-sonnet"
+
+# По умолчанию (для старта)
+DEFAULT_MODEL = MODEL_BASIC
+
+# Настройки контекста (Сколько сообщений помнить)
+LIMITS = {
+    "START": 10,  # Дешевый тариф
+    "PRO": 30,    # Средний
+    "NEO": 60     # Топ (Matrix Style)
+}
 
 SYSTEM_PROMPT = (
     "Ты — vnxORACLE, цифровой разум системы vnxMATRIX. "
@@ -25,25 +36,23 @@ SYSTEM_PROMPT = (
     "Ты вежлив, но не эмоционален. Ты — Система."
 )
 
-AI_TEMPERATURE = 0.7  # Креативность (0.0 - робот, 1.0 - фантазер)
-MAX_HISTORY_DEPTH = 20 # Глубина памяти диалога
+AI_TEMPERATURE = 0.7
 
 # =========================================================
-# 🎹 UI / ТЕКСТЫ (RUSSIAN CLEAN STYLE)
+# 🎹 КНОПКИ (UI)
 # =========================================================
-
-# Твои кнопки (оставил как ты просил)
-BTN_NEW_DIALOG = "⚡️ НОВЫЙ ДИАЛОГ"
-BTN_MY_SESSIONS = "🗂 МОИ СЕССИИ"  # Пока не используется в main.py, но пусть будет
-BTN_CHANGE_MODEL = "🧠 СМЕНИТЬ МОДЕЛЬ"
-BTN_PROFILE = "👤 СТАТУС ПОДПИСКИ"
-
-# ! ДОБАВЛЕНО (Требуется для main.py, иначе ошибка AttributeError)
+BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"    # <-- Обновили
+BTN_HISTORY = "💾 ИСТОРИЯ"        # <-- Обновили
+BTN_PROFILE = "👤 МОЙ ПРОФИЛЬ"
 BTN_HELP = "🆘 ПОМОЩЬ"
+BTN_CHANGE_MODEL = "🧠 СМЕНИТЬ МОДЕЛЬ"
 
+# =========================================================
+# 💬 СООБЩЕНИЯ
+# =========================================================
 MSG_WELCOME = (
     "👁 <b>vnxORACLE SYSTEM v1.0</b>\n\n"
-    "Приветствую, Искатель.\n"
+    "Добро пожаловать в систему.\n"
     "Я — интерфейс чистого знания.\n\n"
     "Доступ открыт через шлюз: @vnxMATRIX_Gateway_bot\n"
     "<i>Ожидание команды...</i>"
