@@ -45,21 +45,50 @@ class Database:
                     FOREIGN KEY (session_id) REFERENCES sessions (id)
                 )
             ''')
+
+            # 3. Таблица ПОЛЬЗОВАТЕЛЕЙ (Счетчик токенов)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER PRIMARY KEY,
+                    total_tokens INTEGER DEFAULT 0
+                )
+            ''')
+
             self.conn.commit()
-            logger.info("✅ Database Structure: Sessions & Messages OK.")
+            logger.info("✅ Database Structure OK.")
         except Exception as e:
             logger.error(f"❌ DB Create Tables Error: {e}")
+
+    # --- УПРАВЛЕНИЕ ТОКЕНАМИ ---
+
+    def update_tokens(self, user_id, tokens_spent):
+        """Прибавляет токены к общему счету юзера"""
+        try:
+            cursor = self.conn.cursor()
+            # Сначала убедимся, что юзер есть в базе
+            cursor.execute("INSERT OR IGNORE INTO users (user_id, total_tokens) VALUES (?, 0)", (user_id,))
+            # Обновляем счетчик
+            cursor.execute("UPDATE users SET total_tokens = total_tokens + ? WHERE user_id = ?", (tokens_spent, user_id))
+            self.conn.commit()
+        except Exception as e:
+            logger.error(f"DB Token Update Error: {e}")
+
+    def get_total_tokens(self, user_id):
+        """Возвращает сколько всего потрачено"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT total_tokens FROM users WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            return row['total_tokens'] if row else 0
+        except Exception:
+            return 0
 
     # --- УПРАВЛЕНИЕ СЕССИЯМИ ---
 
     def create_session(self, user_id, title="Новый диалог"):
-        """Создает новую сессию и делает её активной"""
         try:
             cursor = self.conn.cursor()
-            # Сначала закрываем все старые
             cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
-            
-            # Создаем новую
             cursor.execute("INSERT INTO sessions (user_id, title) VALUES (?, ?)", (user_id, title))
             self.conn.commit()
             return cursor.lastrowid
@@ -68,35 +97,26 @@ class Database:
             return None
 
     def activate_session(self, user_id, session_id):
-        """Переключает активный чат (Восстанавливает контекст)"""
         try:
             cursor = self.conn.cursor()
-            # 1. Выключаем все
             cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
-            # 2. Включаем нужный
             cursor.execute("UPDATE sessions SET is_active = 1 WHERE id = ? AND user_id = ?", (session_id, user_id))
             self.conn.commit()
             return True
-        except Exception as e:
-            logger.error(f"DB Activate Session Error: {e}")
+        except Exception:
             return False
 
     def get_active_session(self, user_id):
-        """Ищет текущую открытую сессию"""
         try:
             cursor = self.conn.cursor()
             cursor.execute("SELECT id FROM sessions WHERE user_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1", (user_id,))
             row = cursor.fetchone()
-            if row:
-                return row['id']
-            else:
-                return self.create_session(user_id)
-        except Exception as e:
-            logger.error(f"DB Get Active Session Error: {e}")
+            if row: return row['id']
+            else: return self.create_session(user_id)
+        except Exception:
             return None
 
     def update_session_title(self, session_id, text):
-        """Называет чат по первому сообщению"""
         try:
             short_title = text[:30] + "..." if len(text) > 30 else text
             cursor = self.conn.cursor()
@@ -106,7 +126,6 @@ class Database:
             pass
 
     def get_session_title(self, session_id):
-        """Получает название чата"""
         try:
             cursor = self.conn.cursor()
             cursor.execute("SELECT title FROM sessions WHERE id = ?", (session_id,))
@@ -116,16 +135,11 @@ class Database:
             return "Чат"
 
     def get_user_sessions(self, user_id, limit=10):
-        """Возвращает список последних чатов"""
         try:
             cursor = self.conn.cursor()
-            cursor.execute(
-                "SELECT id, title, created_at FROM sessions WHERE user_id = ? ORDER BY id DESC LIMIT ?", 
-                (user_id, limit)
-            )
+            cursor.execute("SELECT id, title, created_at FROM sessions WHERE user_id = ? ORDER BY id DESC LIMIT ?", (user_id, limit))
             return cursor.fetchall()
-        except Exception as e:
-            logger.error(f"DB Get Sessions Error: {e}")
+        except Exception:
             return []
 
     # --- УПРАВЛЕНИЕ СООБЩЕНИЯМИ ---
@@ -144,16 +158,9 @@ class Database:
     def get_history(self, session_id, limit=20):
         try:
             cursor = self.conn.cursor()
-            query = f"""
-                SELECT role, content FROM (
-                    SELECT role, content, id FROM messages 
-                    WHERE session_id = ? 
-                    ORDER BY id DESC LIMIT ?
-                ) ORDER BY id ASC
-            """
+            query = f"SELECT role, content FROM (SELECT role, content, id FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id ASC"
             cursor.execute(query, (session_id, limit))
             rows = cursor.fetchall()
             return [{"role": row['role'], "content": row['content']} for row in rows]
-        except Exception as e:
-            logger.error(f"DB History Error: {e}")
+        except Exception:
             return []
