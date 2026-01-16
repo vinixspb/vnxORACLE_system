@@ -22,7 +22,7 @@ class Database:
         try:
             cursor = self.conn.cursor()
             
-            # 1. Таблица СЕССИЙ (Чатов)
+            # 1. Таблица СЕССИЙ
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +33,7 @@ class Database:
                 )
             ''')
 
-            # 2. Таблица СООБЩЕНИЙ (привязана к session_id)
+            # 2. Таблица СООБЩЕНИЙ
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,10 +53,10 @@ class Database:
     # --- УПРАВЛЕНИЕ СЕССИЯМИ ---
 
     def create_session(self, user_id, title="Новый диалог"):
-        """Создает новую сессию и возвращает её ID"""
+        """Создает новую сессию и делает её активной"""
         try:
             cursor = self.conn.cursor()
-            # Сначала закрываем (архивируем) все старые активные сессии юзера
+            # Сначала закрываем все старые
             cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
             
             # Создаем новую
@@ -67,8 +67,22 @@ class Database:
             logger.error(f"DB Create Session Error: {e}")
             return None
 
+    def activate_session(self, user_id, session_id):
+        """Переключает активный чат (Восстанавливает контекст)"""
+        try:
+            cursor = self.conn.cursor()
+            # 1. Выключаем все
+            cursor.execute("UPDATE sessions SET is_active = 0 WHERE user_id = ?", (user_id,))
+            # 2. Включаем нужный
+            cursor.execute("UPDATE sessions SET is_active = 1 WHERE id = ? AND user_id = ?", (session_id, user_id))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"DB Activate Session Error: {e}")
+            return False
+
     def get_active_session(self, user_id):
-        """Ищет текущую открытую сессию. Если нет - создает новую."""
+        """Ищет текущую открытую сессию"""
         try:
             cursor = self.conn.cursor()
             cursor.execute("SELECT id FROM sessions WHERE user_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1", (user_id,))
@@ -82,9 +96,8 @@ class Database:
             return None
 
     def update_session_title(self, session_id, text):
-        """Называет чат по первым словам первого сообщения"""
+        """Называет чат по первому сообщению"""
         try:
-            # Берем первые 30 символов
             short_title = text[:30] + "..." if len(text) > 30 else text
             cursor = self.conn.cursor()
             cursor.execute("UPDATE sessions SET title = ? WHERE id = ?", (short_title, session_id))
@@ -92,8 +105,18 @@ class Database:
         except Exception:
             pass
 
+    def get_session_title(self, session_id):
+        """Получает название чата"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT title FROM sessions WHERE id = ?", (session_id,))
+            row = cursor.fetchone()
+            return row['title'] if row else "Чат"
+        except Exception:
+            return "Чат"
+
     def get_user_sessions(self, user_id, limit=10):
-        """Возвращает список последних чатов (для кнопки История)"""
+        """Возвращает список последних чатов"""
         try:
             cursor = self.conn.cursor()
             cursor.execute(
@@ -119,7 +142,6 @@ class Database:
             logger.error(f"DB Add Message Error: {e}")
 
     def get_history(self, session_id, limit=20):
-        """История КОНКРЕТНОЙ сессии"""
         try:
             cursor = self.conn.cursor()
             query = f"""
