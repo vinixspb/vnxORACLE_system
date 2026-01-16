@@ -33,15 +33,14 @@ class GoogleSheetsManager:
         except Exception as e:
             logger.error(f"❌ ORACLE Auth Error: {e}")
 
-    def check_ai_access(self, tg_id):
+    def get_user_tariff(self, tg_id):
         """
-        Проверяет подписку.
-        Логика: Ищем по всей таблице. Если есть ХОТЯ БЫ ОДНА строка
-        с этим telegram_id и статусом Active — даем доступ.
+        Проверяет подписку и возвращает ТАРИФ (START, PRO, NEO).
+        Если подписки нет или она не Active -> возвращает None.
         """
         if not self.client: 
             self._authenticate()
-            if not self.client: return False
+            if not self.client: return None
 
         try:
             sheet = self.client.open_by_key(self.sheet_id)
@@ -50,24 +49,29 @@ class GoogleSheetsManager:
             
             target_id = str(tg_id).strip()
             
-            # Проходим по всем записям
-            for row in records:
-                # Получаем ID из строки (название столбца как в твоей таблице)
+            for row in reversed(records):
+                # 1. Ищем по telegram_id
                 row_tg_id = str(row.get('telegram_id', '')).strip()
                 
-                # Если ID совпал
                 if row_tg_id == target_id:
-                    # Проверяем статус
+                    # 2. Проверяем активность (AI_Access)
                     ai_status = str(row.get('AI_Access', '')).strip()
                     
-                    # Если нашли Active — СРАЗУ возвращаем True (Ура, доступ есть!)
-                    # Мы не смотрим остальные строки, одного Active достаточно.
                     if ai_status == 'Active':
-                        return True
+                        # 3. Возвращаем тариф (Колонка E - tariff)
+                        # Если в ячейке пусто или странное, ставим START по умолчанию
+                        tariff = str(row.get('tariff', 'START')).strip().upper()
+                        
+                        # Если там написано что-то сложное (напр. "Индивидуальный"), 
+                        # мапим это в наши тарифы, или возвращаем как есть.
+                        # Для простоты считаем, что в таблице будет написано START, PRO или NEO.
+                        if tariff not in ['PRO', 'NEO']:
+                            tariff = 'START'
+                            
+                        return tariff
             
-            # Если цикл закончился, а True мы так и не вернули — значит, активных подписок нет.
-            return False
+            return None # Не найден или не активен
 
         except Exception as e:
-            logger.error(f"❌ Check Access Error: {e}")
-            return False
+            logger.error(f"❌ Check Tariff Error: {e}")
+            return None
