@@ -11,8 +11,9 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID") 
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
-# Ссылка на шлюз (для кнопки оплаты)
-LINK_GATEWAY = "https://t.me/vnxMATRIX_Gateway_bot"
+# Реквизиты для оплаты (Заглушка, можно вписать карту/крипту)
+PAYMENT_INFO = "USDT (TRC20): T..........................." 
+ADMIN_CONTACT = "@vinixspb"
 
 # =========================================================
 # ⚙️ МОЗГ И ЛИМИТЫ
@@ -29,25 +30,25 @@ LIMITS = {
     "NEO": 60
 }
 
-# Описания тарифов (Цены обновлены: 390 / 990 / 1490)
+# Описания тарифов (Новые иконки + Цены)
 TARIFF_INFO = {
     "START": (
-        "🟢 <b>TARIF: START</b>\n"
+        "💠 <b>TARIF: START</b>\n"
         "├ Модель: GPT-3.5 Turbo\n"
         "├ Память: 10 сообщений\n"
         "└ Цена: 390₽ / мес"
     ),
     "PRO": (
-        "🟡 <b>TARIF: PRO</b>\n"
-        "├ Модель: GPT-4o Mini (Быстрая)\n"
+        "⚡️ <b>TARIF: PRO</b>\n"
+        "├ Модель: GPT-4o Mini (Speed)\n"
         "├ Память: 30 сообщений\n"
         "└ Цена: 990₽ / мес"
     ),
     "NEO": (
-        "🔴 <b>TARIF: NEO (VIP)</b>\n"
+        "🧬 <b>TARIF: NEO (EVOLUTION)</b>\n"
         "├ Модель: Claude 3.5 Sonnet / GPT-4o\n"
         "├ Память: 60 сообщений\n"
-        "├ Режим кодинга: Max\n"
+        "├ Coding: MAX Level\n"
         "└ Цена: 1490₽ / мес"
     )
 }
@@ -69,17 +70,15 @@ BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
 BTN_PROFILE = "👤 МОЙ ПРОФИЛЬ"
 BTN_TARIFFS = "💳 ТАРИФНЫЕ ПЛАНЫ"
 BTN_CHANGE_MODEL = "🧠 СМЕНИТЬ МОДЕЛЬ"
-BTN_HELP = "🆘 ПОДДЕРЖКА"  # <-- Вернули и переименовали
+BTN_HELP = "🆘 ПОДДЕРЖКА"
 
 # =========================================================
 # 💬 СООБЩЕНИЯ
 # =========================================================
-# Вернули твой текст с рекламой шлюза
 MSG_WELCOME = (
     "👁 <b>vnxORACLE SYSTEM</b>\n\n"
     "Добро пожаловать в систему.\n"
     "Я — интерфейс чистого знания.\n\n"
-    "Доступ открыт через шлюз: @vnxMATRIX_Gateway_bot\n"
     "<i>Ожидание команды...</i>"
 )
 
