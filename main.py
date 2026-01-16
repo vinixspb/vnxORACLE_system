@@ -10,15 +10,11 @@ from services.sheets_manager import GoogleSheetsManager
 from services.ai_engine import AIEngine
 from services.database import Database
 
-# --- ЛОГИ ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("apscheduler").setLevel(logging.WARNING)
-logging.getLogger("googleapiclient").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-# --- ИНИЦИАЛИЗАЦИЯ ---
 try:
     sheets_mgr = GoogleSheetsManager()
     ai_engine = AIEngine()
@@ -27,23 +23,42 @@ try:
 except Exception as e:
     logger.critical(f"❌ Init Error: {e}")
 
-# --- UI: ГЛАВНАЯ КЛАВИАТУРА ---
+# --- UI: ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_HISTORY)],
         [KeyboardButton(config.BTN_PROFILE), KeyboardButton(config.BTN_TARIFFS)],
-        [KeyboardButton(config.BTN_CHANGE_MODEL), KeyboardButton(config.BTN_HELP)] # <-- Добавили Поддержку сюда
+        [KeyboardButton(config.BTN_CHANGE_MODEL), KeyboardButton(config.BTN_HELP)]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# --- UI: МЕНЮ ПОКУПКИ (Цены обновлены) ---
 def get_subscription_keyboard():
     keyboard = [
-        [InlineKeyboardButton("🟢 START (390₽)", callback_data="buy_START")],
-        [InlineKeyboardButton("🟡 PRO (990₽)", callback_data="buy_PRO")],
-        [InlineKeyboardButton("🔴 NEO (1490₽)", callback_data="buy_NEO")],
+        [InlineKeyboardButton("💠 START (390₽)", callback_data="buy_START")],
+        [InlineKeyboardButton("⚡️ PRO (990₽)", callback_data="buy_PRO")],
+        [InlineKeyboardButton("🧬 NEO (1490₽)", callback_data="buy_NEO")],
         [InlineKeyboardButton("👨‍💻 Связь с Архитектором", url="https://t.me/vinixspb")]
     ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_history_keyboard(user_id):
+    """Генерирует кнопки истории с крестиками удаления"""
+    sessions = db.get_user_sessions(user_id, limit=10)
+    if not sessions:
+        return None
+    
+    keyboard = []
+    for s in sessions:
+        date_short = s['created_at'][5:16]
+        title_text = f"{s['title']} ({date_short})"
+        
+        # ДВЕ КНОПКИ В СТРОКУ: [ Загрузить ] [ ❌ ]
+        btn_load = InlineKeyboardButton(text=title_text, callback_data=f"session_{s['id']}")
+        btn_del = InlineKeyboardButton(text="❌", callback_data=f"del_{s['id']}")
+        
+        keyboard.append([btn_load, btn_del])
+        
     return InlineKeyboardMarkup(keyboard)
 
 # --- ЛОГИКА ---
@@ -52,27 +67,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"👤 Start: {user.id}")
 
-    # Проверяем тариф
     tariff = sheets_mgr.get_user_tariff(user.id)
 
-    # 1. Если тарифа НЕТ (None)
     if not tariff:
-        # Показываем Приветствие (Рекламу) + Меню покупки
         await update.message.reply_text(config.MSG_WELCOME, parse_mode='HTML')
         await update.message.reply_text(config.MSG_NO_SUB, reply_markup=get_subscription_keyboard(), parse_mode='HTML')
         return
 
-    # 2. Если тариф ЕСТЬ -> Строго твой текст
     db.create_session(user.id, title="Новая сессия")
-    
-    msg_granted = (
-        "👁 <b>Доступ разрешен.</b>\n"
-        f"Ваш уровень: <b>{tariff}</b>\n\n"
-        "Добро пожаловать в систему."
-    )
-    
+    # Строго твой текст
     await update.message.reply_text(
-        msg_granted,
+        f"👁 <b>Доступ разрешен.</b>\nВаш уровень: <b>{tariff}</b>\n\nДобро пожаловать в систему.",
         reply_markup=get_main_keyboard(),
         parse_mode='HTML'
     )
@@ -81,10 +86,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text
     user_id = user.id
-
     user_tariff = sheets_mgr.get_user_tariff(user_id)
 
-    # --- СИСТЕМНЫЕ КНОПКИ ---
+    # --- КНОПКИ ---
 
     if text == config.BTN_NEW_DIALOG:
         if not user_tariff: return await send_paywall(update)
@@ -94,24 +98,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == config.BTN_HISTORY:
         if not user_tariff: return await send_paywall(update)
-        sessions = db.get_user_sessions(user_id, limit=10)
-        if not sessions:
+        
+        markup = get_history_keyboard(user_id)
+        if not markup:
             await update.message.reply_text("📂 Архив пуст.")
         else:
-            keyboard_buttons = []
-            for s in sessions:
-                date_short = s['created_at'][5:16]
-                btn_text = f"{s['title']} ({date_short})"
-                keyboard_buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"session_{s['id']}")])
-            markup = InlineKeyboardMarkup(keyboard_buttons)
-            await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
+            await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>\n<i>Нажмите на название для загрузки или ❌ для удаления.</i>", reply_markup=markup, parse_mode='HTML')
         return
 
     if text == config.BTN_PROFILE:
         status = f"✅ {user_tariff}" if user_tariff else "❌ NO ACCESS"
         limit = config.LIMITS.get(user_tariff, 0) if user_tariff else 0
+        total_tokens = db.get_total_tokens(user_id)
+        
         await update.message.reply_text(
-            f"👤 <b>ПРОФИЛЬ</b>\nID: <code>{user_id}</code>\nStatus: <b>{status}</b>\nПамять: {limit} msg\nModel: {config.DEFAULT_MODEL}", 
+            f"👤 <b>ПРОФИЛЬ</b>\n"
+            f"ID: <code>{user_id}</code>\n"
+            f"Status: <b>{status}</b>\n"
+            f"Memory: {limit} msg\n"
+            f"Spent Tokens: <b>{total_tokens}</b>\n"
+            f"Current Model: {config.DEFAULT_MODEL}", 
             parse_mode='HTML'
         )
         return
@@ -124,14 +130,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Логика кнопки ПОДДЕРЖКА
     if text == config.BTN_HELP:
-        await update.message.reply_text(
-            "🆘 <b>ПОДДЕРЖКА АРХИТЕКТОРА</b>\n\n"
-            "Если возникли сбои в Матрице или вопросы по оплате:\n"
-            "👨‍💻 @vinixspb",
-            parse_mode='HTML'
-        )
+        # Используем текст из конфига
+        await update.message.reply_text(config.MSG_SUPPORT, parse_mode='HTML')
         return
 
     if text == config.BTN_CHANGE_MODEL:
@@ -159,13 +160,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     full_context = db.get_history(session_id, limit=history_depth)
 
     try:
-        ai_response = await ai_engine.get_response(full_context, config.DEFAULT_MODEL)
+        ai_response, tokens_spent = await ai_engine.get_response(full_context, config.DEFAULT_MODEL)
         db.add_message(session_id, "assistant", ai_response, model=config.DEFAULT_MODEL)
-        final_text = f"{ai_response}\n\n⚙️ <i>Model: {config.DEFAULT_MODEL}</i>"
+        db.update_tokens(user_id, tokens_spent)
+        total_spent = db.get_total_tokens(user_id)
+
+        # Красивый вывод с цитатой для технички
+        final_text = (
+            f"{ai_response}\n\n"
+            f"<blockquote>⚙️ {config.DEFAULT_MODEL} | 🎫 {tokens_spent} tok | ∑ {total_spent}</blockquote>"
+        )
+        
         try:
-            await update.message.reply_text(final_text, parse_mode='Markdown')
-        except:
             await update.message.reply_text(final_text, parse_mode='HTML')
+        except:
+            await update.message.reply_text(f"{ai_response}\n\n(Tokens: {tokens_spent})")
+            
     except Exception as e:
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка связи.")
@@ -176,24 +186,47 @@ async def send_paywall(update: Update):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    await query.answer()
-
+    
+    # Не делаем query.answer() сразу, так как при удалении может быть алерт
+    
     data = query.data
     
+    # --- УДАЛЕНИЕ СЕССИИ ---
+    if data.startswith("del_"):
+        session_id = int(data.split("_")[1])
+        if db.delete_session(user_id, session_id):
+            await query.answer("🗑 Чат удален")
+            # Обновляем список кнопок прямо в сообщении
+            new_markup = get_history_keyboard(user_id)
+            if new_markup:
+                await query.edit_message_reply_markup(reply_markup=new_markup)
+            else:
+                await query.edit_message_text("📂 Архив пуст.")
+        else:
+            await query.answer("⚠️ Ошибка удаления", show_alert=True)
+        return
+
+    await query.answer()
+
+    # --- ОПЛАТА ---
     if data.startswith("buy_"):
         plan = data.split("_")[1]
         info = config.TARIFF_INFO.get(plan, "Error")
         
+        invoice_text = (
+            f"{info}\n\n"
+            "💳 <b>РЕКВИЗИТЫ ДЛЯ ОПЛАТЫ:</b>\n"
+            "<code>(Настройка платежного модуля...)</code>\n"
+            "<code>USDT / CARD</code>\n\n"
+            "Для активации перешлите скриншот Архитектору:"
+        )
+        
         pay_btn = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"💸 Оплатить {plan}", url=config.LINK_GATEWAY)],
+            [InlineKeyboardButton("📨 Отправить чек Архитектору", url="https://t.me/vinixspb")],
             [InlineKeyboardButton("🔙 Назад", callback_data="back_to_tariffs")]
         ])
         
-        await query.edit_message_text(
-            f"{info}\n\n<i>Для оплаты вы будете перенаправлены в платежный шлюз.</i>",
-            reply_markup=pay_btn,
-            parse_mode='HTML'
-        )
+        await query.edit_message_text(invoice_text, reply_markup=pay_btn, parse_mode='HTML')
         return
 
     if data == "back_to_tariffs":
@@ -204,6 +237,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # --- ЗАГРУЗКА СЕССИИ ---
     if data.startswith("session_"):
         session_id = int(data.split("_")[1])
         if db.activate_session(user_id, session_id):
