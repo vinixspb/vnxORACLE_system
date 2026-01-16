@@ -127,12 +127,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- 2. ОБРАБОТКА ЗАПРОСА К НЕЙРОСЕТИ ---
 
     # Снова проверяем доступ (на случай, если подписка кончилась 5 минут назад)
-    if not sheets_mgr.check_ai_access(user_id):
-        await update.message.reply_text(
-            "⛔️ <b>ПОДПИСКА НЕ АКТИВНА</b>\n"
-            "Обратитесь в @vnxMATRIX_Gateway_bot"
+    await update.message.reply_text(
+            "⛔️ <b>ДОСТУП ЗАПРЕЩЕН</b>\n\n"
+            "Ваша подписка на Нейро-модуль не активна.\n"
+            "Для активации обратитесь к Шлюзу: @vnxMATRIX_Gateway_bot",
+            parse_mode='HTML'
         )
-        return
 
     # Показываем "печатает...", пока ИИ думает
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
