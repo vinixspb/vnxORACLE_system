@@ -128,7 +128,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Снова проверяем доступ (на случай, если подписка кончилась 5 минут назад)
     if not sheets_mgr.check_ai_access(user_id):
-        await update.message.reply_text("⛔️ Подписка истекла.")
+        await update.message.reply_text(
+            "⛔️ <b>ПОДПИСКА НЕ АКТИВНА</b>\n"
+            "Обратитесь в @vnxMATRIX_Gateway_bot"
+        )
         return
 
     # Показываем "печатает...", пока ИИ думает
