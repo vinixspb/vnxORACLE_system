@@ -6,7 +6,6 @@ import config
 
 logger = logging.getLogger(__name__)
 
-# Используем стандартные права доступа
 SCOPES = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/spreadsheets",
@@ -21,34 +20,24 @@ class GoogleSheetsManager:
         self._authenticate()
 
     def _authenticate(self):
-        """
-        Аутентификация. Пытаемся взять JSON из конфига (как в Matrix),
-        если нет - ищем файл keys.json.
-        """
         try:
             if config.GOOGLE_CREDENTIALS_JSON:
-                # Загружаем из переменной окружения (String -> Dict)
                 creds_dict = json.loads(config.GOOGLE_CREDENTIALS_JSON)
                 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPES)
             else:
-                # Резерв: загружаем из файла
                 creds = ServiceAccountCredentials.from_json_keyfile_name("keys.json", SCOPES)
 
             self.client = gspread.authorize(creds)
             logger.info("✅ ORACLE: Google Sheets Connected")
             
         except Exception as e:
-            # Логируем ошибку, но не роняем бота сразу
             logger.error(f"❌ ORACLE Auth Error: {e}")
-
-    # ==========================================================================
-    # 1. ЛОГИКА ПРОВЕРКИ ДОСТУПА (READ ONLY)
-    # ==========================================================================
 
     def check_ai_access(self, tg_id):
         """
-        Проверяет, есть ли у пользователя статус Active в колонке AI_Access.
-        Использует лист 'Clients'.
+        Проверяет подписку.
+        Логика: Ищем по всей таблице. Если есть ХОТЯ БЫ ОДНА строка
+        с этим telegram_id и статусом Active — даем доступ.
         """
         if not self.client: 
             self._authenticate()
@@ -61,18 +50,22 @@ class GoogleSheetsManager:
             
             target_id = str(tg_id).strip()
             
-            for row in reversed(records):
-                # !!! ИСПРАВЛЕНИЕ ЗДЕСЬ !!!
-                # Используем 'telegram_id', так как так назван столбец C в таблице
+            # Проходим по всем записям
+            for row in records:
+                # Получаем ID из строки (название столбца как в твоей таблице)
                 row_tg_id = str(row.get('telegram_id', '')).strip()
                 
+                # Если ID совпал
                 if row_tg_id == target_id:
+                    # Проверяем статус
                     ai_status = str(row.get('AI_Access', '')).strip()
+                    
+                    # Если нашли Active — СРАЗУ возвращаем True (Ура, доступ есть!)
+                    # Мы не смотрим остальные строки, одного Active достаточно.
                     if ai_status == 'Active':
                         return True
-                    else:
-                        return False
             
+            # Если цикл закончился, а True мы так и не вернули — значит, активных подписок нет.
             return False
 
         except Exception as e:
