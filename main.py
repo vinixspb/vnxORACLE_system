@@ -23,8 +23,7 @@ try:
 except Exception as e:
     logger.critical(f"❌ Init Error: {e}")
 
-# --- UI: ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-
+# --- UI: ГЛАВНАЯ КЛАВИАТУРА ---
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_HISTORY)],
@@ -33,6 +32,7 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+# --- UI: МЕНЮ ПОКУПКИ ---
 def get_subscription_keyboard():
     keyboard = [
         [InlineKeyboardButton("💠 START (390₽)", callback_data="buy_START")],
@@ -42,18 +42,20 @@ def get_subscription_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# --- UI: ИСТОРИЯ (Широкая кнопка + Крестик) ---
 def get_history_keyboard(user_id):
-    """Генерирует кнопки истории с крестиками удаления"""
     sessions = db.get_user_sessions(user_id, limit=10)
     if not sessions:
         return None
     
     keyboard = []
     for s in sessions:
+        # Формат: "Название (12-01 14:00)"
         date_short = s['created_at'][5:16]
         title_text = f"{s['title']} ({date_short})"
         
-        # ДВЕ КНОПКИ В СТРОКУ: [ Загрузить ] [ ❌ ]
+        # СТРОГАЯ СТРУКТУРА: [ Название ] [ ❌ ]
+        # Telegram сам распределит ширину: много места под текст, мало под крестик
         btn_load = InlineKeyboardButton(text=title_text, callback_data=f"session_{s['id']}")
         btn_del = InlineKeyboardButton(text="❌", callback_data=f"del_{s['id']}")
         
@@ -69,13 +71,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     tariff = sheets_mgr.get_user_tariff(user.id)
 
+    # 1. Если тарифа НЕТ
     if not tariff:
         await update.message.reply_text(config.MSG_WELCOME, parse_mode='HTML')
         await update.message.reply_text(config.MSG_NO_SUB, reply_markup=get_subscription_keyboard(), parse_mode='HTML')
         return
 
+    # 2. Если тариф ЕСТЬ
     db.create_session(user.id, title="Новая сессия")
-    # Строго твой текст
     await update.message.reply_text(
         f"👁 <b>Доступ разрешен.</b>\nВаш уровень: <b>{tariff}</b>\n\nДобро пожаловать в систему.",
         reply_markup=get_main_keyboard(),
@@ -88,7 +91,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
 
-    # --- КНОПКИ ---
+    # --- КНОПКИ МЕНЮ ---
 
     if text == config.BTN_NEW_DIALOG:
         if not user_tariff: return await send_paywall(update)
@@ -103,7 +106,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not markup:
             await update.message.reply_text("📂 Архив пуст.")
         else:
-            await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>\n<i>Нажмите на название для загрузки или ❌ для удаления.</i>", reply_markup=markup, parse_mode='HTML')
+            await update.message.reply_text(
+                "💾 <b>ИСТОРИЯ ЧАТОВ:</b>\n<i>Нажмите на название для загрузки или ❌ для удаления.</i>", 
+                reply_markup=markup, 
+                parse_mode='HTML'
+            )
         return
 
     if text == config.BTN_PROFILE:
@@ -131,7 +138,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == config.BTN_HELP:
-        # Используем текст из конфига
+        # Используем текст поддержки из конфига
         await update.message.reply_text(config.MSG_SUPPORT, parse_mode='HTML')
         return
 
@@ -143,7 +150,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
              await update.message.reply_text("🧠 <b>ВЫБОР МОДЕЛИ:</b>\n(Функционал в разработке)", parse_mode='HTML')
         return
 
-    # --- AI ---
+    # --- AI ОБРАБОТКА ---
     
     if not user_tariff:
         return await send_paywall(update)
@@ -161,11 +168,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         ai_response, tokens_spent = await ai_engine.get_response(full_context, config.DEFAULT_MODEL)
+        
         db.add_message(session_id, "assistant", ai_response, model=config.DEFAULT_MODEL)
         db.update_tokens(user_id, tokens_spent)
         total_spent = db.get_total_tokens(user_id)
 
-        # Красивый вывод с цитатой для технички
+        # Техническая информация в blockquote (серая полоска)
         final_text = (
             f"{ai_response}\n\n"
             f"<blockquote>⚙️ {config.DEFAULT_MODEL} | 🎫 {tokens_spent} tok | ∑ {total_spent}</blockquote>"
@@ -180,23 +188,21 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка связи.")
 
+# --- ВСПОМОГАТЕЛЬНЫЕ ---
+
 async def send_paywall(update: Update):
     await update.message.reply_text(config.MSG_NO_SUB, reply_markup=get_subscription_keyboard(), parse_mode='HTML')
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-    
-    # Не делаем query.answer() сразу, так как при удалении может быть алерт
-    
     data = query.data
     
-    # --- УДАЛЕНИЕ СЕССИИ ---
+    # 1. УДАЛЕНИЕ СЕССИИ (Обновляем список на лету)
     if data.startswith("del_"):
         session_id = int(data.split("_")[1])
         if db.delete_session(user_id, session_id):
             await query.answer("🗑 Чат удален")
-            # Обновляем список кнопок прямо в сообщении
             new_markup = get_history_keyboard(user_id)
             if new_markup:
                 await query.edit_message_reply_markup(reply_markup=new_markup)
@@ -208,7 +214,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    # --- ОПЛАТА ---
+    # 2. ОПЛАТА
     if data.startswith("buy_"):
         plan = data.split("_")[1]
         info = config.TARIFF_INFO.get(plan, "Error")
@@ -237,7 +243,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # --- ЗАГРУЗКА СЕССИИ ---
+    # 3. ЗАГРУЗКА ЧАТА
     if data.startswith("session_"):
         session_id = int(data.split("_")[1])
         if db.activate_session(user_id, session_id):
