@@ -8,7 +8,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-# Инициализация сервисов (Синглтоны)
+# Инициализация сервисов
 try:
     sheets_mgr = GoogleSheetsManager()
     ai_engine = AIEngine()
@@ -18,5 +18,6 @@ except Exception as e:
     logger.critical(f"❌ Critical Init Error: {e}")
     raise e
 
-# Оперативная память для моделей {user_id: "model_name"}
+# Оперативная память для выбора моделей пользователями
+# {user_id: "model_name"}
 USER_MODELS = {}
