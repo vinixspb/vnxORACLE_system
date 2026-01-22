@@ -35,8 +35,8 @@ class GoogleSheetsManager:
 
     def get_user_tariff(self, tg_id):
         """
-        Проверяет подписку и возвращает ТАРИФ (START, PRO, NEO).
-        Если подписки нет или она не Active -> возвращает None.
+        Сканирует ВСЮ таблицу и ищет НАИВЫСШИЙ активный тариф пользователя.
+        Приоритет: NEO > PRO > START.
         """
         if not self.client: 
             self._authenticate()
@@ -49,28 +49,36 @@ class GoogleSheetsManager:
             
             target_id = str(tg_id).strip()
             
-            for row in reversed(records):
-                # 1. Ищем по telegram_id
+            # Собираем все найденные активные тарифы в список
+            found_tariffs = set()
+            
+            for row in records:
+                # 1. Сверяем ID (по столбцу telegram_id)
                 row_tg_id = str(row.get('telegram_id', '')).strip()
                 
                 if row_tg_id == target_id:
-                    # 2. Проверяем активность (AI_Access)
+                    # 2. Проверяем, активна ли подписка
                     ai_status = str(row.get('AI_Access', '')).strip()
                     
                     if ai_status == 'Active':
-                        # 3. Возвращаем тариф (Колонка E - tariff)
-                        # Если в ячейке пусто или странное, ставим START по умолчанию
-                        tariff = str(row.get('tariff', 'START')).strip().upper()
-                        
-                        # Если там написано что-то сложное (напр. "Индивидуальный"), 
-                        # мапим это в наши тарифы, или возвращаем как есть.
-                        # Для простоты считаем, что в таблице будет написано START, PRO или NEO.
-                        if tariff not in ['PRO', 'NEO']:
-                            tariff = 'START'
-                            
-                        return tariff
+                        # 3. Читаем тариф и нормализуем его (в верхний регистр)
+                        raw_tariff = str(row.get('tariff', '')).strip().upper()
+                        found_tariffs.add(raw_tariff)
+
+            # --- ЛОГИКА ПРИОРИТЕТОВ ---
             
-            return None # Не найден или не активен
+            # Если ничего активного не нашли
+            if not found_tariffs:
+                return None
+            
+            # Если нашли, выбираем самый крутой
+            if 'NEO' in found_tariffs:
+                return 'NEO'
+            elif 'PRO' in found_tariffs:
+                return 'PRO'
+            else:
+                # Если написано START, Индивидуальный, VIP, Partner или пусто — считаем за START
+                return 'START'
 
         except Exception as e:
             logger.error(f"❌ Check Tariff Error: {e}")
