@@ -1,9 +1,10 @@
 import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, BotCommand
 import config
+# Импортируем обработчики из нового файла
 from handlers import start, handle_text, handle_voice, handle_callback
 
-# Логгер уже настроен в loader.py, но main тоже хочет писать логи
+# Логгер уже настроен в loader.py
 logger = logging.getLogger(__name__)
 
 async def post_init(application: Application):
@@ -18,7 +19,7 @@ def main():
     
     app = Application.builder().token(config.BOT_TOKEN_ORACLE).post_init(post_init).build()
     
-    # Регистрируем обработчики из файла handlers.py
+    # Регистрируем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
