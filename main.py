@@ -16,8 +16,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-# --- ОПЕРАТИВНАЯ ПАМЯТЬ ДЛЯ НАСТРОЕК ---
-# Храним выбранную модель юзера: {user_id: "model_name"}
+# --- ОПЕРАТИВНАЯ ПАМЯТЬ ---
 USER_MODELS = {} 
 
 try:
@@ -28,7 +27,7 @@ try:
 except Exception as e:
     logger.critical(f"❌ Init Error: {e}")
 
-# --- UI: КЛАВИАТУРЫ ---
+# --- UI: ГЛАВНЫЕ КЛАВИАТУРЫ ---
 
 def get_main_keyboard():
     keyboard = [
@@ -47,8 +46,50 @@ def get_subscription_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# --- UI: МЕНЮ ВОЗМОЖНОСТЕЙ (КАК НА СКРИНЕ) ---
+def get_features_keyboard():
+    """Главное меню выбора режима работы (Hub)"""
+    keyboard = [
+        # Ряд 1: Текст и Аудио
+        [
+            InlineKeyboardButton("💡 GPTs/Claude/Gemini", callback_data="feature_text"),
+            InlineKeyboardButton("🎤 Аудио с ИИ", callback_data="feature_audio")
+        ],
+        # Ряд 2: Дизайн и Видео
+        [
+            InlineKeyboardButton("🎨 Дизайн с ИИ", callback_data="feature_design"),
+            InlineKeyboardButton("📹 Видео будущего", callback_data="feature_video")
+        ],
+        # Ряд 3: Хранитель (на всю ширину)
+        [
+            InlineKeyboardButton("🗄 Хранитель изображений", callback_data="feature_keeper")
+        ],
+        # Ряд 4: Помощь и База
+        [
+            InlineKeyboardButton("❓ Помощь", callback_data="feature_help"),
+            InlineKeyboardButton("📚 База знаний", callback_data="feature_knowledge")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# --- UI: ВЫБОР МОДЕЛИ (ТЕКСТ) ---
+def get_models_keyboard(current_model):
+    models = [
+        ("GPT-4o Mini (Basic)", config.MODEL_BASIC),
+        ("GPT-4o (Smart)", config.MODEL_PRO),
+        ("Claude 3.5 Sonnet (Code)", config.MODEL_NEO)
+    ]
+    keyboard = []
+    for name, code in models:
+        prefix = "✅ " if code == current_model else "⚪️ "
+        keyboard.append([InlineKeyboardButton(prefix + name, callback_data=f"setmodel_{code}")])
+    
+    # Добавляем кнопку "Назад" в главное меню возможностей
+    keyboard.append([InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")])
+    return InlineKeyboardMarkup(keyboard)
+
+# --- UI: ИСТОРИЯ ---
 def get_history_keyboard(user_id):
-    """ИСТОРИЯ: [Название] [❌] в одну строку"""
     sessions = db.get_user_sessions(user_id, limit=10)
     if not sessions: return None
     
@@ -61,19 +102,6 @@ def get_history_keyboard(user_id):
         btn_del = InlineKeyboardButton(text="❌", callback_data=f"del_{s['id']}")
         keyboard.append([btn_load, btn_del])
         
-    return InlineKeyboardMarkup(keyboard)
-
-def get_models_keyboard(current_model):
-    """Выбор модели"""
-    models = [
-        ("GPT-4o Mini (Basic)", config.MODEL_BASIC),
-        ("GPT-4o (Smart)", config.MODEL_PRO),
-        ("Claude 3.5 Sonnet (Code)", config.MODEL_NEO)
-    ]
-    keyboard = []
-    for name, code in models:
-        prefix = "✅ " if code == current_model else "⚪️ "
-        keyboard.append([InlineKeyboardButton(prefix + name, callback_data=f"setmodel_{code}")])
     return InlineKeyboardMarkup(keyboard)
 
 # --- ЛОГИКА ---
@@ -94,14 +122,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
-# --- ГЛАВНЫЙ ОБРАБОТЧИК (ТЕКСТ) ---
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text
     user_id = user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
 
-    # 1. СИСТЕМНЫЕ КОМАНДЫ
+    # --- СИСТЕМНЫЕ КНОПКИ ---
+
     if text == config.BTN_NEW_DIALOG:
         if not user_tariff: return await send_paywall(update)
         db.create_session(user_id, title="Новый диалог")
@@ -114,7 +142,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not markup:
             await update.message.reply_text("📂 Архив пуст.")
         else:
-            await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
+            # ТЕКСТ ИСПРАВЛЕН ПО ЗАПРОСУ
+            await update.message.reply_text(
+                "💾 <b>ИСТОРИЯ ЧАТОВ:</b>\nНажмите на название для загрузки или ❌ для удаления.", 
+                reply_markup=markup, 
+                parse_mode='HTML'
+            )
         return
 
     if text == config.BTN_PROFILE:
@@ -137,43 +170,45 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(config.MSG_SUPPORT, parse_mode='HTML')
         return
 
+    # --- ГЛАВНОЕ ИЗМЕНЕНИЕ: ОТКРЫТИЕ МЕНЮ ВОЗМОЖНОСТЕЙ ---
     if text == config.BTN_CHANGE_MODEL:
         if not user_tariff: return await send_paywall(update)
+        
+        # ТЕКСТ ИСПРАВЛЕН ПО ЗАПРОСУ
         if user_tariff == "START":
-            await update.message.reply_text(f"🔒 На тарифе <b>START</b> доступна только GPT-4o Mini.\nДля смены модели обновитесь до <b>PRO</b>.", parse_mode='HTML')
+            await update.message.reply_text(
+                "🔒 На тарифе START доступна только GPT-4o Mini.\n"
+                "Для смены модели обновитесь до тарифа PRO или NEO.",
+                parse_mode='HTML'
+            )
         else:
-            curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
-            await update.message.reply_text("🧠 <b>ВЫБЕРИТЕ НЕЙРОСЕТЬ:</b>", reply_markup=get_models_keyboard(curr), parse_mode='HTML')
+            # Открываем "Хаб" (Меню как на скрине)
+            await update.message.reply_text(
+                "🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>\nВыберите нужный раздел:", 
+                reply_markup=get_features_keyboard(), 
+                parse_mode='HTML'
+            )
         return
 
-    # 2. ОБРАБОТКА ТЕКСТА (AI)
+    # --- AI ---
     await process_ai_request(update, context, text)
 
-# --- ОБРАБОТЧИК ГОЛОСА ---
+# --- ГОЛОС ---
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
-
     if not user_tariff: return await send_paywall(update)
-    
-    # Голосовые доступны только от PRO? Или всем? Пока сделаем всем.
-    # if user_tariff == "START":
-    #     await update.message.reply_text("🔒 Голосовой ввод доступен на тарифе PRO.")
-    #     return
 
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
 
     try:
-        # 1. Скачиваем файл
         voice_file = await context.bot.get_file(update.message.voice.file_id)
         file_path = f"voice_{user_id}.ogg"
         await voice_file.download_to_drive(file_path)
 
-        # 2. Транскрибация
         transcript = await ai_engine.transcribe_audio(file_path)
         
-        # Удаляем файл
         if os.path.exists(file_path):
             os.remove(file_path)
 
@@ -181,17 +216,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Не удалось распознать голос.")
             return
 
-        # 3. Отправляем пользователю, что мы услышали
         await update.message.reply_text(f"🎤 <i>Вы сказали:</i> \"{transcript}\"", parse_mode='HTML')
-
-        # 4. Отправляем текст в ИИ как обычное сообщение
         await process_ai_request(update, context, transcript)
 
     except Exception as e:
         logger.error(f"Voice Error: {e}")
         await update.message.reply_text("⚠️ Ошибка обработки голоса.")
 
-# --- ФУНКЦИЯ ЗАПРОСА К ИИ ---
 async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE, input_text: str):
     user_id = update.effective_user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
@@ -209,7 +240,6 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     history_depth = config.LIMITS.get(user_tariff, 10)
     full_context = db.get_history(session_id, limit=history_depth)
 
-    # Определяем модель (Юзерская или Дефолтная)
     model = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
 
     try:
@@ -217,15 +247,12 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         db.add_message(session_id, "assistant", ai_response, model=model)
         db.update_tokens(user_id, tokens_spent)
         total_spent = db.get_total_tokens(user_id)
-
-        # Если модель не базовая, покажем её в футере
-        model_name = model.split('/')[-1] # openai/gpt-4o -> gpt-4o
         
+        model_name = model.split('/')[-1]
         final_text = (
             f"{ai_response}\n\n"
             f"<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {total_spent}</blockquote>"
         )
-        
         try:
             await update.message.reply_text(final_text, parse_mode='HTML')
         except:
@@ -235,21 +262,51 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка связи.")
 
-# --- CALLBACKS ---
+# --- CALLBACKS (ОБРАБОТКА КНОПОК) ---
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
     
-    # 1. СМЕНА МОДЕЛИ
+    # 1. ОБРАБОТКА НОВОГО МЕНЮ (HUB)
+    if data == "back_to_features":
+        await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>", reply_markup=get_features_keyboard(), parse_mode='HTML')
+        return
+
+    if data == "feature_text":
+        # Открываем выбор моделей
+        curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
+        await query.edit_message_text("💡 <b>ВЫБЕРИТЕ ТЕКСТОВУЮ НЕЙРОСЕТЬ:</b>", reply_markup=get_models_keyboard(curr), parse_mode='HTML')
+        return
+    
+    if data == "feature_audio":
+        await query.answer("🎤 Голосовой режим активен")
+        await query.message.reply_text("🎤 <b>АУДИО РЕЖИМ</b>\nПросто отправьте голосовое сообщение, и я отвечу текстом.\n(В будущем я смогу отвечать голосом!)", parse_mode='HTML')
+        return
+
+    if data in ["feature_design", "feature_video", "feature_keeper"]:
+        await query.answer("🚧 В разработке", show_alert=True)
+        # Можно вывести заглушку
+        # await query.message.reply_text("🎨 <b>ДИЗАЙН</b>\nЭтот модуль станет доступен в ближайшем обновлении системы.", parse_mode='HTML')
+        return
+    
+    if data == "feature_help":
+        await query.message.reply_text(config.MSG_SUPPORT, parse_mode='HTML')
+        return
+    
+    if data == "feature_knowledge":
+        await query.answer("📚 База знаний наполняется...")
+        return
+
+    # 2. СМЕНА МОДЕЛИ (ВНУТРИ TEXT)
     if data.startswith("setmodel_"):
         new_model = data.split("setmodel_")[1]
         USER_MODELS[user_id] = new_model
         await query.answer(f"🧠 Модель изменена на {new_model}")
-        await query.edit_message_text(f"✅ <b>Модель активирована:</b> {new_model}", parse_mode='HTML')
+        await query.edit_message_text(f"✅ <b>Модель активирована:</b> {new_model}\nМожно продолжать общение.", parse_mode='HTML')
         return
 
-    # 2. УДАЛЕНИЕ
+    # 3. УДАЛЕНИЕ
     if data.startswith("del_"):
         session_id = int(data.split("_")[1])
         if db.delete_session(user_id, session_id):
@@ -265,7 +322,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    # 3. ОПЛАТА
+    # 4. ОПЛАТА
     if data.startswith("buy_"):
         plan = data.split("_")[1]
         info = config.TARIFF_INFO.get(plan, "Error")
@@ -287,7 +344,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("💳 <b>ВЫБОР УРОВНЯ ДОСТУПА</b>", reply_markup=get_subscription_keyboard(), parse_mode='HTML')
         return
 
-    # 4. ЗАГРУЗКА
+    # 5. ЗАГРУЗКА
     if data.startswith("session_"):
         session_id = int(data.split("_")[1])
         if db.activate_session(user_id, session_id):
@@ -309,7 +366,6 @@ def main():
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    # Добавляем обработчик ГОЛОСА
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(CallbackQueryHandler(handle_callback))
     
