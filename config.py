@@ -16,11 +16,12 @@ PAYMENT_INFO = "USDT (TRC20): T..........................."
 ADMIN_CONTACT = "@vinixspb"
 
 # =========================================================
-# ⚙️ МОЗГ И ЛИМИТЫ
+# ⚙️ МОЗГ И ЛИМИТЫ (UPDATED)
 # =========================================================
-MODEL_BASIC = "openai/gpt-3.5-turbo"
-MODEL_PRO = "openai/gpt-4o-mini"
-MODEL_NEO = "anthropic/claude-3.5-sonnet"
+# OpenRouter IDs
+MODEL_BASIC = "openai/gpt-4o-mini"          # Вместо 3.5 (Быстрее, дешевле, умнее)
+MODEL_PRO = "openai/gpt-4o"                 # Флагман
+MODEL_NEO = "anthropic/claude-3.5-sonnet"   # Гений кодинга
 
 DEFAULT_MODEL = MODEL_BASIC
 
@@ -30,23 +31,22 @@ LIMITS = {
     "NEO": 60
 }
 
-# Исправлено TARIF -> TARIFF
 TARIFF_INFO = {
     "START": (
         "💠 <b>TARIFF: START</b>\n"
-        "├ Модель: GPT-3.5 Turbo\n"
+        "├ Модель: GPT-4o Mini\n"
         "├ Память: 10 сообщений\n"
         "└ Цена: 390₽ / мес"
     ),
     "PRO": (
         "⚡️ <b>TARIFF: PRO</b>\n"
-        "├ Модель: GPT-4o Mini (Speed)\n"
+        "├ Модель: GPT-4o (Flagship)\n"
         "├ Память: 30 сообщений\n"
         "└ Цена: 990₽ / мес"
     ),
     "NEO": (
         "🧬 <b>TARIFF: NEO (EVOLUTION)</b>\n"
-        "├ Модель: Claude 3.5 Sonnet / GPT-4o\n"
+        "├ Модель: Claude 3.5 Sonnet\n"
         "├ Память: 60 сообщений\n"
         "├ Coding: MAX Level\n"
         "└ Цена: 1490₽ / мес"
@@ -75,7 +75,6 @@ BTN_HELP = "🆘 ПОДДЕРЖКА"
 # =========================================================
 # 💬 СООБЩЕНИЯ
 # =========================================================
-# ВОЗВРАЩЕНО: Полный текст с рекламой шлюза
 MSG_WELCOME = (
     "👁 <b>vnxORACLE SYSTEM</b>\n\n"
     "Добро пожаловать в систему.\n"
@@ -90,7 +89,6 @@ MSG_NO_SUB = (
     "Для подключения к Системе выберите уровень доступа:"
 )
 
-# ВОЗВРАЩЕНО: Полный текст поддержки
 MSG_SUPPORT = (
     "🆘 <b>ПОДДЕРЖКА АРХИТЕКТОРА</b>\n\n"
     "Если возникли сбои в Матрице или вопросы по оплате:\n"
