@@ -1,13 +1,17 @@
 import logging
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, BotCommand
+# --- ИСПРАВЛЕНИЕ ТУТ: BotCommand берем из telegram, а не telegram.ext ---
+from telegram import BotCommand 
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+
 import config
-# Импортируем обработчики из нового файла
+# Импортируем обработчики из файла handlers.py
 from handlers import start, handle_text, handle_voice, handle_callback
 
 # Логгер уже настроен в loader.py
 logger = logging.getLogger(__name__)
 
 async def post_init(application: Application):
+    """Устанавливает кнопку Меню слева внизу"""
     await application.bot.set_my_commands([BotCommand("start", "Главное Меню")])
 
 def main():
@@ -17,6 +21,7 @@ def main():
 
     logger.info("👁 vnxORACLE: ONLINE")
     
+    # post_init добавляет кнопку меню при запуске
     app = Application.builder().token(config.BOT_TOKEN_ORACLE).post_init(post_init).build()
     
     # Регистрируем обработчики
