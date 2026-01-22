@@ -16,12 +16,11 @@ PAYMENT_INFO = "USDT (TRC20): T..........................."
 ADMIN_CONTACT = "@vinixspb"
 
 # =========================================================
-# ⚙️ МОЗГ И ЛИМИТЫ (UPDATED)
+# ⚙️ МОЗГ И ЛИМИТЫ
 # =========================================================
-# OpenRouter IDs
-MODEL_BASIC = "openai/gpt-4o-mini"          # Вместо 3.5 (Быстрее, дешевле, умнее)
-MODEL_PRO = "openai/gpt-4o"                 # Флагман
-MODEL_NEO = "anthropic/claude-3.5-sonnet"   # Гений кодинга
+MODEL_BASIC = "openai/gpt-4o-mini"
+MODEL_PRO = "openai/gpt-4o"
+MODEL_NEO = "anthropic/claude-3.5-sonnet"
 
 DEFAULT_MODEL = MODEL_BASIC
 
@@ -65,12 +64,12 @@ AI_TEMPERATURE = 0.7
 # =========================================================
 # 🎹 КНОПКИ (UI)
 # =========================================================
-BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"
-BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
-BTN_PROFILE = "👤 МОЙ ПРОФИЛЬ"
-BTN_TARIFFS = "💳 ТАРИФНЫЕ ПЛАНЫ"
-BTN_CHANGE_MODEL = "🧠 СМЕНИТЬ МОДЕЛЬ"
-BTN_HELP = "🆘 ПОДДЕРЖКА"
+BTN_NEW_DIALOG = "♻️ Новый чат"
+BTN_HISTORY = "💾 История чатов"
+BTN_PROFILE = "👤 Мой профиль"
+BTN_TARIFFS = "💳 Тарифные планы"
+BTN_CHANGE_MODEL = "🧠 Сменить модель" # Кнопка осталась, но функционал новый
+BTN_HELP = "🆘 Пподдержка"
 
 # =========================================================
 # 💬 СООБЩЕНИЯ
