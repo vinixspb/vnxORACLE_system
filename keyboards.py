@@ -12,9 +12,9 @@ def get_main_keyboard():
 
 def get_subscription_keyboard():
     keyboard = [
-        [InlineKeyboardButton("💠 START (390₽)", callback_data="buy_START")],
-        [InlineKeyboardButton("⚡️ PRO (990₽)", callback_data="buy_PRO")],
-        [InlineKeyboardButton("🧬 NEO (1490₽)", callback_data="buy_NEO")],
+        [InlineKeyboardButton("💠 START (190₽)", callback_data="buy_START")],
+        [InlineKeyboardButton("⚡️ PRO (690₽)", callback_data="buy_PRO")],
+        [InlineKeyboardButton("🧬 NEO (990₽)", callback_data="buy_NEO")],
         [InlineKeyboardButton("👨‍💻 Связь с Архитектором", url="https://t.me/vinixspb")]
     ]
     return InlineKeyboardMarkup(keyboard)
