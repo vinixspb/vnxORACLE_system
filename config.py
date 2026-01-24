@@ -11,6 +11,10 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID") 
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
+# 🏛 АРХИВ (The Vault)
+archive_id_str = os.getenv("ARCHIVE_CHANNEL_ID")
+ARCHIVE_CHANNEL_ID = int(archive_id_str) if archive_id_str else 0
+
 # Реквизиты
 PAYMENT_INFO = "USDT (TRC20): T..........................." 
 ADMIN_CONTACT = "@vinixspb"
@@ -30,25 +34,30 @@ LIMITS = {
     "NEO": 60
 }
 
+# --- ОПИСАНИЯ ТАРИФОВ ---
 TARIFF_INFO = {
     "START": (
         "💠 <b>TARIFF: START</b>\n"
+        "<i>(Первые 2 месяца — БЕСПЛАТНО)</i>\n"
         "├ Модель: GPT-4o Mini\n"
         "├ Память: 10 сообщений\n"
-        "└ Цена: 390₽ / мес"
+        "├ Лимит: 100,000 токенов/мес\n"
+        "└ Цена: 190₽ / мес"
     ),
     "PRO": (
         "⚡️ <b>TARIFF: PRO</b>\n"
         "├ Модель: GPT-4o (Flagship)\n"
         "├ Память: 30 сообщений\n"
-        "└ Цена: 990₽ / мес"
+        "├ Лимит: 500,000 токенов/мес\n"
+        "└ Цена: 590₽ / мес"
     ),
     "NEO": (
         "🧬 <b>TARIFF: NEO (EVOLUTION)</b>\n"
         "├ Модель: Claude 3.5 Sonnet\n"
         "├ Память: 60 сообщений\n"
         "├ Coding: MAX Level\n"
-        "└ Цена: 1490₽ / мес"
+        "├ Лимит: 1,000,000 токенов/мес\n"
+        "└ Цена: 990₽ / мес"
     )
 }
 
@@ -64,12 +73,12 @@ AI_TEMPERATURE = 0.7
 # =========================================================
 # 🎹 КНОПКИ (UI)
 # =========================================================
-BTN_NEW_DIALOG = "♻️ Новый чат"
-BTN_HISTORY = "💾 История чатов"
+BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"
+BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
 BTN_PROFILE = "👤 Мой профиль"
 BTN_TARIFFS = "💳 Тарифные планы"
-BTN_CHANGE_MODEL = "🧠 Сменить модель" # Кнопка осталась, но функционал новый
-BTN_HELP = "🆘 Пподдержка"
+BTN_CHANGE_MODEL = "🧠 Сменить модель"
+BTN_HELP = "🆘 Поддержка"
 
 # =========================================================
 # 💬 СООБЩЕНИЯ
