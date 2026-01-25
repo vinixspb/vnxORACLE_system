@@ -34,10 +34,10 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                         parse_mode='HTML'
                     )
                 else:
-                    await update.message.reply_text("⚠️ Сбой модуля дизайна.")
+                    await update.message.reply_text("⚠️ Сбой визуализации.")
     except Exception as e:
         logger.error(f"Img Error: {e}")
-        await update.message.reply_text("⚠️ Ошибка связи с нейросетью.")
+        await update.message.reply_text("⚠️ Ошибка связи с ИИ.")
 
 async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE, input_text: str):
     user_id = update.effective_user.id
@@ -47,7 +47,7 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
     session_id = db.get_active_session(user_id)
     
-    # Авто-заголовок сессии
+    # Авто-заголовок (первые 30 символов первого сообщения)
     history = db.get_history(session_id, limit=1)
     if not history:
         db.update_session_title(session_id, input_text[:30])
@@ -61,19 +61,14 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         ai_response, tokens_spent = await ai_engine.get_response(full_context, model)
         db.add_message(session_id, "assistant", ai_response, model=model)
         db.update_tokens(user_id, tokens_spent)
-        total_spent = db.get_total_tokens(user_id)
-        
         model_name = model.split('/')[-1]
-        final_text = (
-            f"{ai_response}\n\n"
-            f"<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {total_spent}</blockquote>"
-        )
+        final_text = (f"{ai_response}\n\n<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {db.get_total_tokens(user_id)}</blockquote>")
         await update.message.reply_text(final_text, parse_mode='HTML')
     except Exception as e:
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка связи.")
 
-# --- ОСНОВНЫЕ ОБРАБОТЧИКИ ---
+# --- ХЕНДЛЕРЫ ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -83,54 +78,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
         return
     db.create_session(user.id, title="Новый чат")
-    await update.message.reply_text(
-        f"👁 <b>Доступ разрешен.</b>\nВаш уровень: <b>{tariff}</b>\n\nДобро пожаловать в систему.",
-        reply_markup=keyboards.get_main_keyboard(),
-        parse_mode='HTML'
-    )
+    await update.message.reply_text(f"👁 <b>Доступ разрешен.</b>\nВаш уровень: <b>{tariff}</b>", reply_markup=keyboards.get_main_keyboard(), parse_mode='HTML')
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
     user_tariff = sheets_mgr.get_user_tariff(user_id)
 
-    # 0. ЧЕРНЫЙ СПИСОК (Защита от утечки в ИИ)
-    sys_buttons = [
-        config.BTN_NEW_DIALOG, config.BTN_HISTORY, 
-        config.BTN_PROFILE, config.BTN_TARIFFS, 
-        config.BTN_CHANGE_MODEL, config.BTN_HELP
-    ]
+    # Защита системных команд
+    sys_buttons = [config.BTN_NEW_DIALOG, config.BTN_HISTORY, config.BTN_PROFILE, config.BTN_TARIFFS, config.BTN_CHANGE_MODEL, config.BTN_HELP]
 
-    # 1. ПЕРЕХВАТ /img
     if text.startswith("/img "):
         if not user_tariff: return await send_paywall(update)
-        await generate_image(update, context, text.replace("/img ", ""))
+        await generate_image(update, context, text[5:])
         return
 
-    # 2. ПРОВЕРКА СИСТЕМНЫХ КОМАНД
     if text in sys_buttons:
         if not user_tariff: return await send_paywall(update)
-
+        
         if text == config.BTN_HISTORY:
-            markup = keyboards.get_history_keyboard(user_id)
-            if not markup:
-                await update.message.reply_text("📂 Архив пуст.")
-            else:
-                await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>\nВыберите чат или удалите ненужный.", reply_markup=markup, parse_mode='HTML')
+            markup = keyboards.get_history_keyboard(user_id, mode="view")
+            if not markup: await update.message.reply_text("📂 Архив пуст.")
+            else: await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>\nВыберите сессию для загрузки данных.", reply_markup=markup, parse_mode='HTML')
             return
 
         if text == config.BTN_NEW_DIALOG:
-            db.create_session(user_id, title="Новый чат")
+            db.create_session(user_id, title="Новый диалог")
             await update.message.reply_text("♻️ <b>Новый диалог создан.</b>", parse_mode='HTML')
             return
 
         if text == config.BTN_PROFILE:
-            total_tokens = db.get_total_tokens(user_id)
-            current_model = USER_MODELS.get(user_id, config.DEFAULT_MODEL).split('/')[-1]
-            await update.message.reply_text(
-                f"👤 <b>ПРОФИЛЬ</b>\nСтатус: <b>{user_tariff}</b>\nТокенов: <b>{total_tokens}</b>\nМодель: <code>{current_model}</code>", 
-                parse_mode='HTML'
-            )
+            curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL).split('/')[-1]
+            await update.message.reply_text(f"👤 <b>ПРОФИЛЬ</b>\nСтатус: {user_tariff}\nМодель: <code>{curr}</code>", parse_mode='HTML')
             return
 
         if text == config.BTN_TARIFFS:
@@ -138,80 +117,60 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if text == config.BTN_CHANGE_MODEL:
-            if user_tariff == "START":
-                await update.message.reply_text("🔒 Смена модели доступна на тарифах PRO/NEO.", parse_mode='HTML')
-            else:
-                await update.message.reply_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
+            await update.message.reply_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
             return
 
         if text == config.BTN_HELP:
             await update.message.reply_text(config.MSG_SUPPORT, parse_mode='HTML')
             return
+        return
 
-        return # Если текст в sys_buttons, но почему-то не обработан - дальше не пускаем
-
-    # 3. ЕСЛИ НЕ СИСТЕМНАЯ КНОПКА - К НЕЙРОСЕТИ
     await process_ai_request(update, context, text)
-
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not sheets_mgr.get_user_tariff(user_id): return await send_paywall(update)
-    if not config.ARCHIVE_CHANNEL_ID: return
-    try:
-        await context.bot.forward_message(chat_id=config.ARCHIVE_CHANNEL_ID, from_chat_id=user_id, message_id=update.message.message_id)
-        await update.message.reply_text("✅ <b>Объект сохранен в Архиве.</b>", parse_mode='HTML')
-    except Exception as e:
-        logger.error(f"Archive Error: {e}")
-
-async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not sheets_mgr.get_user_tariff(user_id): return await send_paywall(update)
-    await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
-    try:
-        voice_file = await context.bot.get_file(update.message.voice.file_id)
-        file_path = f"voice_{user_id}.ogg"
-        await voice_file.download_to_drive(file_path)
-        transcript = await ai_engine.transcribe_audio(file_path)
-        if os.path.exists(file_path): os.remove(file_path)
-        if transcript:
-            await update.message.reply_text(f"🎤 <i>Распознано:</i> \"{transcript}\"", parse_mode='HTML')
-            await process_ai_request(update, context, transcript)
-    except Exception as e:
-        logger.error(f"Voice Error: {e}")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
     
-    if data == "back_to_features":
+    # Режимы истории
+    if data == "history_manage":
+        markup = keyboards.get_history_keyboard(user_id, mode="delete")
+        await query.edit_message_text("🗑 <b>РЕЖИМ УДАЛЕНИЯ:</b>\nВыберите чат для стирания.", reply_markup=markup, parse_mode='HTML')
+    elif data == "history_back":
+        markup = keyboards.get_history_keyboard(user_id, mode="view")
+        await query.edit_message_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
+    
+    # Навигация хаба
+    elif data == "back_to_features":
         await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
     elif data == "feature_text":
         curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
-        await query.edit_message_text("💡 <b>ВЫБЕРИТЕ НЕЙРОСЕТЬ:</b>", reply_markup=keyboards.get_models_keyboard(curr), parse_mode='HTML')
-    elif data == "feature_design":
-        await query.message.reply_text("🎨 <b>ДИЗАЙН:</b>\nПишите <code>/img [описание]</code>", parse_mode='HTML')
-    elif data == "feature_audio":
-        await query.message.reply_text("🎤 <b>АУДИО:</b>\nПросто отправьте голосовое.", parse_mode='HTML')
+        await query.edit_message_text("💡 <b>НЕЙРОСЕТЬ:</b>", reply_markup=keyboards.get_models_keyboard(curr), parse_mode='HTML')
+    
+    # Действия
     elif data.startswith("setmodel_"):
-        new_model = data.split("_")[1]
-        USER_MODELS[user_id] = new_model
-        await query.answer(f"🧠 {new_model} активна")
-        await query.edit_message_text(f"✅ <b>Активировано:</b> {new_model}", parse_mode='HTML')
+        USER_MODELS[user_id] = data.split("_")[1]
+        await query.answer("🧠 Изменено")
+        await query.edit_message_text(f"✅ <b>Модель:</b> {USER_MODELS[user_id]}", parse_mode='HTML')
     elif data.startswith("del_"):
-        session_id = int(data.split("_")[1])
-        if db.delete_session(user_id, session_id):
+        if db.delete_session(user_id, int(data.split("_")[1])):
             await query.answer("🗑 Удалено")
-            markup = keyboards.get_history_keyboard(user_id)
+            markup = keyboards.get_history_keyboard(user_id, mode="delete")
             if markup: await query.edit_message_reply_markup(reply_markup=markup)
             else: await query.edit_message_text("📂 Архив пуст.")
     elif data.startswith("session_"):
-        session_id = int(data.split("_")[1])
-        if db.activate_session(user_id, session_id):
-            title = db.get_session_title(session_id)
-            await query.message.reply_text(f"📂 <b>Загружен чат:</b> {title}", parse_mode='HTML')
+        if db.activate_session(user_id, int(data.split("_")[1])):
+            await query.answer()
+            await query.message.reply_text(f"📂 <b>Чат загружен.</b>", parse_mode='HTML')
     elif data.startswith("buy_"):
         plan = data.split("_")[1]
         await query.edit_message_text(f"{config.TARIFF_INFO[plan]}\n\n💳 <b>Оплата:</b> {config.PAYMENT_INFO}", parse_mode='HTML')
-    
+
     await query.answer()
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if config.ARCHIVE_CHANNEL_ID:
+        try:
+            await context.bot.forward_message(chat_id=config.ARCHIVE_CHANNEL_ID, from_chat_id=update.effective_user.id, message_id=update.message.message_id)
+            await update.message.reply_text("✅ <b>Объект сохранен.</b>", parse_mode='HTML')
+        except: pass
