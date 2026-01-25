@@ -39,22 +39,20 @@ def get_features_keyboard():
 
 def get_models_keyboard(current_model):
     models = [
-        ("GPT-4o Mini (Basic)", config.MODEL_BASIC),
-        ("GPT-4o (Smart)", config.MODEL_PRO),
-        ("Claude 3.5 Sonnet (Code)", config.MODEL_NEO)
+        ("GPT-4o Mini", config.MODEL_BASIC),
+        ("GPT-4o", config.MODEL_PRO),
+        ("Claude 3.5 Sonnet", config.MODEL_NEO)
     ]
     keyboard = []
     for name, code in models:
         prefix = "✅ " if code == current_model else "⚪️ "
         keyboard.append([InlineKeyboardButton(prefix + name, callback_data=f"setmodel_{code}")])
-    
     keyboard.append([InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_history_keyboard(user_id):
     sessions = db.get_user_sessions(user_id, limit=10)
     if not sessions: return None
-    
     keyboard = []
     for s in sessions:
         date_short = s['created_at'][5:16]
@@ -62,5 +60,4 @@ def get_history_keyboard(user_id):
         btn_load = InlineKeyboardButton(text=title_text, callback_data=f"session_{s['id']}")
         btn_del = InlineKeyboardButton(text="❌", callback_data=f"del_{s['id']}")
         keyboard.append([btn_load, btn_del])
-        
     return InlineKeyboardMarkup(keyboard)
