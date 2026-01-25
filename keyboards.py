@@ -29,7 +29,7 @@ def get_features_keyboard():
             InlineKeyboardButton("🎨 Дизайн с ИИ", callback_data="feature_design"),
             InlineKeyboardButton("📹 Видео будущего", callback_data="feature_video")
         ],
-        [InlineKeyboardButton("🗄 Хранитель изображений", callback_data="feature_keeper")],
+        [InlineKeyboardButton("🗄 Хранитель (Архив)", callback_data="feature_keeper")],
         [
             InlineKeyboardButton("❓ Помощь", callback_data="feature_help"),
             InlineKeyboardButton("📚 База знаний", callback_data="feature_knowledge")
@@ -50,14 +50,29 @@ def get_models_keyboard(current_model):
     keyboard.append([InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")])
     return InlineKeyboardMarkup(keyboard)
 
-def get_history_keyboard(user_id):
+def get_history_keyboard(user_id, mode="view"):
+    """Улучшенная история: длинные кнопки и переключение режимов"""
     sessions = db.get_user_sessions(user_id, limit=10)
-    if not sessions: return None
+    if not sessions: 
+        return None
+    
     keyboard = []
-    for s in sessions:
-        date_short = s['created_at'][5:16]
-        title_text = f"{s['title']} ({date_short})"
-        btn_load = InlineKeyboardButton(text=title_text, callback_data=f"session_{s['id']}")
-        btn_del = InlineKeyboardButton(text="❌", callback_data=f"del_{s['id']}")
-        keyboard.append([btn_load, btn_del])
+    
+    if mode == "view":
+        for s in sessions:
+            date_short = s['created_at'][5:16]
+            title_text = f"📂 {s['title']} ({date_short})"
+            keyboard.append([InlineKeyboardButton(text=title_text, callback_data=f"session_{s['id']}")])
+        
+        # Кнопка перехода в режим удаления
+        keyboard.append([InlineKeyboardButton(text="🗑 УПРАВЛЕНИЕ АРХИВОМ", callback_data="history_manage")])
+    
+    elif mode == "delete":
+        for s in sessions:
+            title_text = f"❌ Стереть: {s['title']}"
+            keyboard.append([InlineKeyboardButton(text=title_text, callback_data=f"del_{s['id']}")])
+        
+        # Кнопка возврата к обычному виду
+        keyboard.append([InlineKeyboardButton(text="🔙 НАЗАД", callback_data="history_back")])
+        
     return InlineKeyboardMarkup(keyboard)
