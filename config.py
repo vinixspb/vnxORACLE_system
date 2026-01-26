@@ -7,8 +7,16 @@ load_dotenv()
 # 🔐 СИСТЕМНЫЕ НАСТРОЙКИ
 # =========================================================
 BOT_TOKEN_ORACLE = os.getenv("BOT_TOKEN_ORACLE")
+
+# Ключ для текстовых моделей (Claude, GPT-4o через роутер)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
+
+# Ключ для Whisper (прямой OpenAI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
+
+# Ключ для ElevenLabs (Озвучка)
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID") 
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
@@ -23,17 +31,15 @@ ADMIN_CONTACT = "@vinixspb"
 # =========================================================
 # ⚙️ МОЗГ И МОДЕЛИ
 # =========================================================
-# Основные (Платные/Лимитированные)
+# 1. Основные (Платные/Лимитированные)
 MODEL_BASIC = "openai/gpt-4o-mini"
 MODEL_PRO = "openai/gpt-4o"
 MODEL_NEO = "anthropic/claude-3.5-sonnet"
 
-# --- ВОТ ЧЕГО НЕ ХВАТАЛО В ТВОЕМ ФАЙЛЕ ---
-# Новые (Бесплатные / Free Tier)
+# 2. Новые (Бесплатные / Free Tier)
 MODEL_DEVSTRAL = "mistralai/devstral-2512:free"        # Код + Агент
 MODEL_CHIMERA = "tngtech/deepseek-r1t2-chimera:free"   # Логика (DeepSeek V3 + R1)
 MODEL_LIQUID = "liquid/lfm-2.5-1.2b-instruct:free"     # Быстрый чат
-# ----------------------------------------
 
 DEFAULT_MODEL = MODEL_BASIC
 
@@ -43,6 +49,13 @@ LIMITS = {
     "NEO": 60
 }
 
+# --- НАСТРОЙКИ ГОЛОСА (ELEVENLABS) ---
+# ID можно брать из библиотеки ElevenLabs
+VOICE_ADAM = "pNInz6obpgDQGcFmaJgB"    # Глубокий мужской (Adam Legacy)
+VOICE_RACHEL = "21m00Tcm4TlvDq8ikWAM"  # Женский (Rachel)
+DEFAULT_VOICE = VOICE_ADAM
+
+# --- ОПИСАНИЯ ТАРИФОВ ---
 TARIFF_INFO = {
     "START": (
         "💠 <b>TARIFF: START</b>\n"
