@@ -8,17 +8,31 @@ DB_NAME = "oracle.db"
 class Database:
     def __init__(self):
         self.conn = None
+        # Сначала подключаемся, затем создаем таблицы
+        self.connect()
         self.create_tables()
 
     def connect(self):
+        """Установка соединения с оптимизацией под многопоточность и скорость"""
         try:
+            # check_same_thread=False позволяет использовать базу в асинхронных хендлерах
             self.conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+            
+            # Позволяет обращаться к полям по именам: row['title'] вместо row[1]
             self.conn.row_factory = sqlite3.Row 
+            
+            # --- ОПТИМИЗАЦИЯ ARCHITECT LEVEL ---
+            # WAL позволяет читать базу, пока в нее идет запись (защита от locked)
+            self.conn.execute("PRAGMA journal_mode=WAL;")
+            # NORMAL снижает нагрузку на диск без потери надежности
+            self.conn.execute("PRAGMA synchronous=NORMAL;")
+            
+            logger.info("✅ Database Connected: WAL Mode Active.")
         except Exception as e:
             logger.error(f"❌ DB Connect Error: {e}")
 
     def create_tables(self):
-        self.connect()
+        """Инициализация структуры базы данных"""
         try:
             cursor = self.conn.cursor()
             
@@ -62,19 +76,15 @@ class Database:
     # --- УПРАВЛЕНИЕ ТОКЕНАМИ ---
 
     def update_tokens(self, user_id, tokens_spent):
-        """Прибавляет токены к общему счету юзера"""
         try:
             cursor = self.conn.cursor()
-            # Сначала убедимся, что юзер есть в базе
             cursor.execute("INSERT OR IGNORE INTO users (user_id, total_tokens) VALUES (?, 0)", (user_id,))
-            # Обновляем счетчик
             cursor.execute("UPDATE users SET total_tokens = total_tokens + ? WHERE user_id = ?", (tokens_spent, user_id))
             self.conn.commit()
         except Exception as e:
             logger.error(f"DB Token Update Error: {e}")
 
     def get_total_tokens(self, user_id):
-        """Возвращает сколько всего потрачено"""
         try:
             cursor = self.conn.cursor()
             cursor.execute("SELECT total_tokens FROM users WHERE user_id = ?", (user_id,))
@@ -111,8 +121,7 @@ class Database:
             cursor = self.conn.cursor()
             cursor.execute("SELECT id FROM sessions WHERE user_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1", (user_id,))
             row = cursor.fetchone()
-            if row: return row['id']
-            else: return self.create_session(user_id)
+            return row['id'] if row else self.create_session(user_id)
         except Exception:
             return None
 
@@ -125,15 +134,6 @@ class Database:
         except Exception:
             pass
 
-    def get_session_title(self, session_id):
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("SELECT title FROM sessions WHERE id = ?", (session_id,))
-            row = cursor.fetchone()
-            return row['title'] if row else "Чат"
-        except Exception:
-            return "Чат"
-
     def get_user_sessions(self, user_id, limit=10):
         try:
             cursor = self.conn.cursor()
@@ -142,15 +142,10 @@ class Database:
         except Exception:
             return []
 
-    # ... (Весь код тот же, добавляем этот метод в класс Database) ...
-
     def delete_session(self, user_id, session_id):
-        """Удаляет сессию и все сообщения в ней"""
         try:
             cursor = self.conn.cursor()
-            # 1. Удаляем сообщения этой сессии
             cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
-            # 2. Удаляем саму сессию (только если она принадлежит этому юзеру)
             cursor.execute("DELETE FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
             self.conn.commit()
             return True
@@ -174,6 +169,7 @@ class Database:
     def get_history(self, session_id, limit=20):
         try:
             cursor = self.conn.cursor()
+            # Сложный запрос для получения последних N сообщений в правильном порядке
             query = f"SELECT role, content FROM (SELECT role, content, id FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?) ORDER BY id ASC"
             cursor.execute(query, (session_id, limit))
             rows = cursor.fetchall()
