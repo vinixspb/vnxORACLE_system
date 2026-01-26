@@ -14,44 +14,51 @@ class AudioStudio:
         self.eleven_url = "https://api.elevenlabs.io/v1"
         self.openai_url = "https://api.openai.com/v1/audio/speech"
         
-        # Заголовки маскировки для ElevenLabs
-        self.headers_eleven = {
-            "xi-api-key": self.eleven_key,
-            "Content-Type": "application/json",
-            "Accept": "audio/mpeg",
-            "Origin": "https://elevenlabs.io",
-            "Referer": "https://elevenlabs.io/"
-        }
-
         # Карта соответствия голосов (ElevenLabs -> OpenAI)
-        # Мы подобрали аналоги, максимально близкие по тембру
         self.voice_map = {
             config.VOICE_ADAM: "onyx",    # Мужской глубокий
             config.VOICE_RACHEL: "alloy",  # Женский нейтральный
-            config.VOICE_FIN: "echo",     # Мужской энергичный
-            config.VOICE_MIMI: "shimmer"  # Высокий/Эмоциональный
+            config.VOICE_FIN: "echo",      # Мужской энергичный
+            config.VOICE_MIMI: "shimmer"   # Высокий/Эмоциональный
         }
-        
-    async def text_to_speech(self, text, voice_id):
+
+    def _get_eleven_headers(self):
+        """Динамические заголовки для глубокой маскировки под Chrome 124"""
+        return {
+            "xi-api-key": self.eleven_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Origin": "https://elevenlabs.io",
+            "Referer": "https://elevenlabs.io/",
+            "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"'
+        }
+
+    async def text_to_speech(self, text: str, voice_id: str):
         """
-        Пробует ElevenLabs, если Cloudflare блокирует — переключается на OpenAI.
-        Возвращает: (байты_аудио, название_движка, is_fallback)
+        Основной метод синтеза с логикой Fallback. 
+        Возвращает: (bytes_audio, engine_name, is_fallback)
         """
-        
-        # 1. Попытка через ElevenLabs
+        if not text or not text.strip():
+            logger.warning("🔍 AudioStudio: Получен пустой текст для озвучки.")
+            return None, "System", False
+
+        # 1. Попытка через ElevenLabs (Primary)
         if self.eleven_key:
-            audio = await self._try_elevenlabs(text, voice_id)
+            audio = await self._try_elevenlabs(text.strip(), voice_id)
             if audio: 
                 return audio, "ElevenLabs", False
             
-        # 2. Если ElevenLabs выдал капчу или ошибку — идем в OpenAI
-        logger.warning("⚠️ ElevenLabs Blocked. Switching to OpenAI Fallback...")
-        audio_fallback = await self._try_openai(text, voice_id)
+        # 2. Переход на OpenAI (Fallback) при блокировке или ошибке
+        logger.warning("🔮 vnxORACLE: Сбой основного шлюза (ElevenLabs). Переключаюсь на резерв (OpenAI)...")
+        audio_fallback = await self._try_openai(text.strip(), voice_id)
         
         if audio_fallback:
-            return audio_fallback, "OpenAI", True # True указывает, что это резервный канал
+            return audio_fallback, "OpenAI", True 
             
-        return None, None, False
+        return None, "Error", False
 
     async def _try_elevenlabs(self, text, voice_id):
         url = f"{self.eleven_url}/text-to-speech/{voice_id}?output_format=mp3_44100_128"
@@ -62,34 +69,33 @@ class AudioStudio:
         }
         
         try:
-            # Используем curl_cffi для имитации браузера Chrome 124
             async with AsyncSession(impersonate="chrome124") as session:
-                resp = await session.post(url, json=payload, headers=self.headers_eleven)
+                resp = await session.post(
+                    url, 
+                    json=payload, 
+                    headers=self._get_eleven_headers(),
+                    timeout=45
+                )
                 if resp.status_code == 200:
                     content = resp.content
-                    # Проверка: если Cloudflare подсунул HTML-капчу вместо MP3
-                    if content.strip().startswith(b"<") or len(content) < 500:
-                        logger.error("ElevenLabs: Cloudflare Captcha or empty response.")
+                    # Если вместо аудио пришел HTML-код (капча) или мусор
+                    if content.startswith(b"<html") or len(content) < 1000:
+                        logger.error("🚫 AudioStudio: ElevenLabs вернул капчу или пустой поток.")
                         return None
                     return content
+                
+                logger.error(f"🚫 ElevenLabs API Status: {resp.status_code}")
                 return None
         except Exception as e:
-            logger.error(f"ElevenLabs Connection Error: {e}")
+            logger.error(f"⚠️ ElevenLabs Critical Error: {e}")
             return None
 
     async def _try_openai(self, text, eleven_voice_id):
-        """Резервная озвучка через OpenAI"""
         if not self.openai_key: 
-            logger.error("OpenAI API Key missing for TTS fallback")
             return None
             
-        # Подбираем голос OpenAI на основе выбранного голоса ElevenLabs
         openai_voice = self.voice_map.get(eleven_voice_id, "alloy")
-        
-        headers = {
-            "Authorization": f"Bearer {self.openai_key}", 
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {self.openai_key}"}
         payload = {
             "model": "tts-1", 
             "input": text, 
@@ -101,17 +107,16 @@ class AudioStudio:
                 async with session.post(self.openai_url, json=payload, headers=headers) as resp:
                     if resp.status == 200:
                         return await resp.read()
-                    else:
-                        err = await resp.text()
-                        logger.error(f"OpenAI TTS Error: {err}")
-                        return None
+                    return None
         except Exception as e:
-            logger.error(f"OpenAI TTS Critical: {e}")
+            logger.error(f"⚠️ OpenAI TTS Fallback Error: {e}")
             return None
 
-    async def generate_sfx(self, description, duration_seconds=None):
-        """SFX пока только через ElevenLabs"""
-        if not self.eleven_key: return None
+    async def generate_sfx(self, description: str, duration_seconds=None):
+        """Генерация звуковых эффектов (SFX Модуль)"""
+        if not self.eleven_key or not description:
+            return None
+            
         url = f"{self.eleven_url}/sound-generation"
         payload = {
             "text": description, 
@@ -120,12 +125,14 @@ class AudioStudio:
         }
         try:
             async with AsyncSession(impersonate="chrome124") as session:
-                resp = await session.post(url, json=payload, headers=self.headers_eleven)
-                if resp.status_code == 200 and not resp.content.startswith(b"<"):
+                resp = await session.post(
+                    url, 
+                    json=payload, 
+                    headers=self._get_eleven_headers(),
+                    timeout=60
+                )
+                if resp.status_code == 200 and not resp.content.startswith(b"<html"):
                     return resp.content
                 return None
         except Exception:
             return None
-
-# Инициализация синглтона
-audio_studio = AudioStudio()
