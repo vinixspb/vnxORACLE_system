@@ -47,6 +47,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         await update.message.reply_text("⚠️ Ошибка связи с ИИ.")
 
 async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE, input_text: str, image_path: str = None):
+    """Ядро обработки запросов: Текст + Контекст + Зрение"""
     user_id = update.effective_user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
     if not user_tariff: return await send_paywall(update)
@@ -54,6 +55,7 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
     session_id = db.get_active_session(user_id)
     
+    # Авто-заголовок для новой сессии
     history = db.get_history(session_id, limit=1)
     if not history:
         clean_title = input_text.replace("[Audio Input]: ", "")[:30]
@@ -65,7 +67,9 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     model = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
 
     try:
+        # Отправляем в AI Engine (поддерживает Vision внутри)
         ai_response, tokens_spent = await ai_engine.get_response(full_context, model, image_path=image_path)
+        
         db.add_message(session_id, "assistant", ai_response, model=model)
         db.update_tokens(user_id, tokens_spent)
         
@@ -76,12 +80,14 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка нейро-интерфейса.")
     finally:
+        # Всегда удаляем временное изображение после обработки
         if image_path and os.path.exists(image_path):
             os.remove(image_path)
 
 # --- МУЛЬТИМЕДИА ХЕНДЛЕРЫ ---
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка изображений (Vision Module)"""
     user_id = update.effective_user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
     
@@ -89,17 +95,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("🧬 <b>VISION MODULE</b>\n\nАнализ доступен на тарифах <b>PRO</b> и <b>NEO</b>.", parse_mode='HTML')
 
     caption = update.message.caption or "Что на этом изображении?"
-    photo = update.message.photo[-1]
+    photo = update.message.photo[-1] # Самое высокое разрешение
     
     try:
         photo_file = await context.bot.get_file(photo.file_id)
-        temp_path = os.path.join(DOWNLOADS_DIR, f"v_{user_id}.jpg")
+        temp_path = os.path.join(DOWNLOADS_DIR, f"vision_{user_id}.jpg")
         await photo_file.download_to_drive(temp_path)
+        
         await process_ai_request(update, context, caption, image_path=temp_path)
     except Exception as e:
         logger.error(f"Vision Error: {e}")
+        await update.message.reply_text("⚠️ Ошибка при чтении изображения.")
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка голосовых сообщений (Whisper)"""
     user_id = update.effective_user.id
     if not sheets_mgr.get_user_tariff(user_id): return await send_paywall(update)
     
@@ -108,6 +117,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         voice_file = await context.bot.get_file(update.message.voice.file_id)
         file_path = os.path.join(DOWNLOADS_DIR, f"v_{user_id}.ogg")
         await voice_file.download_to_drive(file_path)
+        
         transcript = await ai_engine.transcribe_audio(file_path)
         if os.path.exists(file_path): os.remove(file_path)
         
@@ -116,14 +126,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await process_ai_request(update, context, f"[Audio Input]: {transcript}")
     except Exception as e:
         logger.error(f"Voice Error: {e}")
-
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Архивация файлов в канал Хранителя"""
-    if config.ARCHIVE_CHANNEL_ID:
-        try:
-            await context.bot.forward_message(chat_id=config.ARCHIVE_CHANNEL_ID, from_chat_id=update.effective_chat.id, message_id=update.message.message_id)
-            await update.message.reply_text("✅ <b>Объект сохранен в Хранилище.</b>", parse_mode='HTML')
-        except: pass
 
 # --- ОСНОВНЫЕ КОМАНДЫ ---
 
@@ -136,24 +138,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
         return
     db.create_session(user_id, title="Новый чат")
-    await update.message.reply_text(f"👁 <b>Доступ разрешен.</b>\nУровень: <b>{tariff}</b>", reply_markup=keyboards.get_main_keyboard(), parse_mode='HTML')
+    await update.message.reply_text(f"👁 <b>vnxORACLE: ONLINE</b>\nВаш уровень: <b>{tariff}</b>", reply_markup=keyboards.get_main_keyboard(), parse_mode='HTML')
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
     user_tariff = sheets_mgr.get_user_tariff(user_id)
 
-    # Режимы ожидания
+    # Режимы ожидания (TTS / SFX)
     mode = context.user_data.get('mode')
     if mode == 'tts_wait':
         await handle_tts_request(update, context, text)
         return
     if mode == 'sfx_wait':
         await handle_sfx_request(update, context, text)
-        context.user_data['mode'] = None
+        context.user_data['mode'] = None # Сброс режима для звуков
         return
 
-    # Системные кнопки
+    # Обработка системных кнопок из конфига
     if text == config.BTN_TARIFFS:
         msg = "💳 <b>ТАРИФНЫЕ ПЛАНЫ</b>\n\n💠 <b>START:</b> 190₽\n⚡️ <b>PRO:</b> 590₽\n🧬 <b>NEO:</b> 990₽"
         await update.message.reply_text(msg, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
@@ -161,7 +163,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == config.BTN_NEW_DIALOG:
         db.create_session(user_id, title="Новый диалог")
-        await update.message.reply_text("♻️ <b>Контекст очищен. Новый чат.</b>", parse_mode='HTML')
+        await update.message.reply_text("♻️ <b>Контекст очищен. Начата новая сессия.</b>", parse_mode='HTML')
         return
 
     if text == config.BTN_HISTORY:
@@ -171,16 +173,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == config.BTN_CHANGE_MODEL:
-        await update.message.reply_text("🧩 <b>ВОЗМОЖНОСТИ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
+        await update.message.reply_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
         return
 
     if text.startswith("/img "):
         await generate_image(update, context, text[5:])
         return
 
+    # Обычный запрос к ИИ
     await process_ai_request(update, context, text)
 
-# --- CALLBACKS & AUDIO LOGIC ---
+# --- CALLBACK HANDLING ---
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -198,7 +201,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("setmodel_"):
         new_m = data.split("setmodel_")[1]
         USER_MODELS[user_id] = new_m
-        await query.answer(f"🧠 Модель активна")
+        await query.answer(f"🧠 Нейропрофиль обновлен")
         await query.edit_message_text(f"✅ <b>Модель изменена.</b>", parse_mode='HTML')
 
     elif data == "feature_audio":
@@ -211,44 +214,69 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['voice_id'] = data.split("setvoice_")[1]
         context.user_data['mode'] = 'tts_wait'
         await query.answer("🎙 Голос выбран")
-        await query.message.reply_text("🗣 <b>Пришлите текст для озвучки:</b>", parse_mode='HTML')
+        await query.message.reply_text("🗣 <b>Режим диктора активен.</b>\nПришлите текст для озвучки:", parse_mode='HTML')
+
+    elif data == "audio_tts_again":
+        context.user_data['mode'] = 'tts_wait'
+        await query.message.reply_text("🎤 Жду следующий текст для озвучки:", parse_mode='HTML')
+
+    elif data == "mode_chat_reset":
+        context.user_data['mode'] = None
+        db.create_session(user_id, title="Новый диалог")
+        await query.message.reply_text("💬 <b>Текстовый чат (Новая сессия)</b>\nПишите ваш запрос:", parse_mode='HTML')
 
     elif data == "audio_sfx":
         context.user_data['mode'] = 'sfx_wait'
-        await query.message.reply_text("🔊 <b>Опишите звук (на англ):</b>", parse_mode='HTML')
+        await query.message.reply_text("🔊 <b>Опишите желаемый звук (на английском):</b>", parse_mode='HTML')
 
     elif data.startswith("session_"):
         s_id = int(data.split("_")[1])
         db.activate_session(user_id, s_id)
         await query.answer("📂 Чат загружен")
-        await query.message.reply_text("📂 <b>История загружена.</b>", parse_mode='HTML')
+        await query.message.reply_text("📂 <b>История диалога восстановлена.</b>", parse_mode='HTML')
 
     elif data == "back_to_features":
         await query.edit_message_text("🧩 <b>ВОЗМОЖНОСТИ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
 
     await query.answer()
 
-# --- Внутренние вызовы TTS/SFX ---
+# --- Внутренние вызовы TTS / SFX ---
 
 async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     user_id = update.effective_user.id
     voice = context.user_data.get('voice_id', config.DEFAULT_VOICE)
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
+    # Вызов гибридной студии
     audio_data, engine, is_fallback = await audio_studio.text_to_speech(text, voice)
+    
     if audio_data:
-        warn = "⚠️ <i>Резервный ИИ</i>\n" if is_fallback else ""
-        caption = f"🎙 <b>Готово!</b>\n\n{warn}<blockquote>⚙️ {engine} | 🎫 {len(text)}</blockquote>"
-        await update.message.reply_audio(audio=audio_data, caption=caption, parse_mode='HTML', 
-                                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎤 Еще", callback_data="audio_tts")]]))
+        warn = "⚠️ <i>Резервный ИИ (OpenAI)</i>\n" if is_fallback else ""
+        caption = f"🎙 <b>Голос синтезирован!</b>\n\n{warn}<blockquote>⚙️ {engine} | 🎫 {len(text)} Chars | ∑ {db.get_total_tokens(user_id)}</blockquote>"
+        
+        # Навигация после озвучки
+        keyboard = [[
+            InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again"),
+            InlineKeyboardButton("💬 В новый чат", callback_data="mode_chat_reset")
+        ]]
+        
+        await update.message.reply_audio(
+            audio=audio_data, 
+            title=f"Oracle_Voice_{engine}",
+            performer="vnxORACLE",
+            caption=caption, 
+            parse_mode='HTML', 
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         db.update_tokens(user_id, len(text))
     else:
-        await update.message.reply_text("❌ Ошибка синтеза.")
+        await update.message.reply_text("❌ Ошибка синтеза речи. Попробуйте позже.")
 
 async def handle_sfx_request(update: Update, context: ContextTypes.DEFAULT_TYPE, desc: str):
     user_id = update.effective_user.id
+    await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     sfx = await audio_studio.generate_sfx(desc)
     if sfx:
-        await update.message.reply_audio(audio=sfx, caption=f"🔊 <b>{desc}</b>", parse_mode='HTML')
+        await update.message.reply_audio(audio=sfx, caption=f"🔊 <b>SFX: {desc}</b>", parse_mode='HTML')
     else:
-        await update.message.reply_text("⚠️ Ошибка SFX.")
+        await update.message.reply_text("⚠️ Ошибка генерации звука.")
