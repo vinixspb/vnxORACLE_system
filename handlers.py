@@ -49,7 +49,9 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     history = db.get_history(session_id, limit=1)
     if not history:
-        db.update_session_title(session_id, input_text[:30])
+        # Очищаем заголовок от технического тега, если это первое сообщение
+        clean_title = input_text.replace("[Audio Input]: ", "")[:30]
+        db.update_session_title(session_id, clean_title)
     
     db.add_message(session_id, "user", input_text)
     history_depth = config.LIMITS.get(user_tariff, 10)
@@ -60,7 +62,10 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         ai_response, tokens_spent = await ai_engine.get_response(full_context, model)
         db.add_message(session_id, "assistant", ai_response, model=model)
         db.update_tokens(user_id, tokens_spent)
-        model_name = model.split('/')[-1]
+        
+        # Убираем суффикс :free для красоты
+        model_name = model.split('/')[-1].replace(":free", "")
+        
         final_text = (f"{ai_response}\n\n<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {db.get_total_tokens(user_id)}</blockquote>")
         await update.message.reply_text(final_text, parse_mode='HTML')
     except Exception as e:
@@ -135,9 +140,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await voice_file.download_to_drive(file_path)
         transcript = await ai_engine.transcribe_audio(file_path)
         if os.path.exists(file_path): os.remove(file_path)
+        
         if transcript:
             await update.message.reply_text(f"🎤 <i>Распознано:</i> \"{transcript}\"", parse_mode='HTML')
-            await process_ai_request(update, context, transcript)
+            # Фикс для ИИ, чтобы он не игнорировал аудио-контекст
+            ai_input = f"[Audio Input]: {transcript}"
+            await process_ai_request(update, context, ai_input)
     except Exception as e:
         logger.error(f"Voice Error: {e}")
 
@@ -153,37 +161,73 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
     
-    if data == "history_manage":
+    answered = False # Флаг: был ли отправлен ответ API Telegram
+
+    # --- НАВИГАЦИЯ ---
+    if data == "back_to_features":
+        await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
+    
+    # --- РАЗДЕЛЫ ---
+    elif data == "feature_text":
+        curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
+        await query.edit_message_text("💡 <b>ВЫБЕРИТЕ НЕЙРОСЕТЬ:</b>", reply_markup=keyboards.get_models_keyboard(curr), parse_mode='HTML')
+    
+    elif data == "feature_audio":
+        await query.edit_message_text("🎤 <b>АУДИО-СТУДИЯ (BETA):</b>\nВыберите инструмент:", reply_markup=keyboards.get_audio_keyboard(), parse_mode='HTML')
+        
+    elif data == "feature_design":
+        await query.message.reply_text("🎨 <b>ДИЗАЙН:</b>\nПишите <code>/img [описание]</code>", parse_mode='HTML')
+
+    # --- АУДИО ИНСТРУМЕНТЫ ---
+    elif data == "audio_transcribe":
+        await query.answer("🎙 Режим активен")
+        answered = True
+        await query.message.reply_text("📝 <b>ТРАНСКРИБАЦИЯ:</b>\nПросто отправьте голосовое сообщение или перешлите его сюда.\nСистема автоматически переведет его в текст.", parse_mode='HTML')
+    
+    elif data in ["audio_tts", "audio_suno", "audio_sfx", "audio_clone", "audio_vid2aud", "audio_eleven_music"]:
+        await query.answer("🚧 В разработке", show_alert=True)
+        answered = True
+
+    # --- ИСТОРИЯ ---
+    elif data == "history_manage":
         markup = keyboards.get_history_keyboard(user_id, mode="delete")
         await query.edit_message_text("🗑 <b>РЕЖИМ УДАЛЕНИЯ:</b>", reply_markup=markup, parse_mode='HTML')
+    
     elif data == "history_back":
         markup = keyboards.get_history_keyboard(user_id, mode="view")
         await query.edit_message_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
-    elif data == "back_to_features":
-        await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
-    elif data == "feature_text":
-        curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
-        await query.edit_message_text("💡 <b>НЕЙРОСЕТЬ:</b>", reply_markup=keyboards.get_models_keyboard(curr), parse_mode='HTML')
-    elif data == "feature_design":
-        await query.message.reply_text("🎨 <b>ДИЗАЙН:</b>\nПишите <code>/img [описание]</code>", parse_mode='HTML')
-    elif data == "feature_audio":
-        await query.message.reply_text("🎤 <b>АУДИО:</b>\nОтправьте голосовое.", parse_mode='HTML')
+
+    # --- ДЕЙСТВИЯ ---
     elif data.startswith("setmodel_"):
-        USER_MODELS[user_id] = data.split("_")[1]
-        await query.answer(f"🧠 {USER_MODELS[user_id]} активна")
-        await query.edit_message_text(f"✅ <b>Модель:</b> {USER_MODELS[user_id]}", parse_mode='HTML')
+        new_model_id = data.split("setmodel_")[1]
+        USER_MODELS[user_id] = new_model_id
+        model_name = new_model_id.split("/")[-1].replace(":free", "")
+        if "devstral" in model_name: model_name = "Mistral Devstral 2"
+        if "chimera" in model_name: model_name = "R1T2 Chimera"
+        if "lfm" in model_name: model_name = "Liquid LFM 2.5"
+        
+        await query.answer(f"🧠 {model_name} активирована")
+        answered = True
+        await query.edit_message_text(f"✅ <b>Модель изменена:</b> {model_name}", parse_mode='HTML')
+
     elif data.startswith("del_"):
         if db.delete_session(user_id, int(data.split("_")[1])):
             await query.answer("🗑 Удалено")
+            answered = True
             markup = keyboards.get_history_keyboard(user_id, mode="delete")
             if markup: await query.edit_message_reply_markup(reply_markup=markup)
             else: await query.edit_message_text("📂 Архив пуст.")
+    
     elif data.startswith("session_"):
         if db.activate_session(user_id, int(data.split("_")[1])):
-            await query.answer()
+            await query.answer() # Здесь просто гасим "часики"
+            answered = True
             await query.message.reply_text(f"📂 <b>Чат загружен.</b>", parse_mode='HTML')
+    
     elif data.startswith("buy_"):
         plan = data.split("_")[1]
         await query.edit_message_text(f"{config.TARIFF_INFO[plan]}\n\n💳 <b>Оплата:</b> {config.PAYMENT_INFO}", parse_mode='HTML')
     
-    await query.answer()
+    # ФИНАЛЬНАЯ ПРОВЕРКА: Если не ответили ранее, отвечаем сейчас
+    if not answered:
+        await query.answer()
