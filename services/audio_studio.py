@@ -1,7 +1,6 @@
 import logging
 import json
 import config
-# 👇 Импортируем "магию" для обхода Cloudflare
 from curl_cffi.requests import AsyncSession 
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,7 @@ class AudioStudio:
             logger.warning("⚠️ ElevenLabs API Key не найден. Аудио-студия недоступна.")
     
     async def text_to_speech(self, text, voice_id):
-        """Превращает текст в голосовое сообщение (MP3) с обходом Cloudflare"""
+        """Превращает текст в голосовое сообщение (MP3) с валидацией данных"""
         if not self.api_key: return None
         
         url = f"{self.base_url}/text-to-speech/{voice_id}?output_format=mp3_44100_128"
@@ -36,17 +35,39 @@ class AudioStudio:
         }
         
         try:
-            # 👇 ИСПОЛЬЗУЕМ AsyncSession ИЗ curl_cffi ВМЕСТО aiohttp
-            # impersonate="chrome110" заставляет сервер думать, что мы - настоящий браузер
-            async with AsyncSession(impersonate="chrome110") as session:
+            # СМЕНИЛИ МАСКИРОВКУ НА SAFARI (часто помогает от Cloudflare)
+            async with AsyncSession(impersonate="safari15_5") as session:
                 resp = await session.post(url, json=payload, headers=self.headers)
                 
                 if resp.status_code == 200:
-                    logger.info("✅ TTS Success: Audio received")
-                    return resp.content # Возвращаем байты
+                    # --- ПРОВЕРКА: ЭТО ТОЧНО АУДИО? ---
+                    content_type = resp.headers.get("content-type", "").lower()
+                    content_bytes = resp.content
+                    
+                    # 1. Если это JSON (значит внутри ошибка API ElevenLabs, например лимиты)
+                    if content_bytes.strip().startswith(b"{"):
+                        error_json = resp.json()
+                        logger.error(f"TTS Logic Error: {error_json}")
+                        return None
+                        
+                    # 2. Если это HTML (значит это капча Cloudflare)
+                    if content_bytes.strip().startswith(b"<"):
+                        logger.error("TTS Error: Cloudflare sent HTML CAPTCHA instead of Audio. Try again later.")
+                        return None
+                    
+                    # 3. Если размер слишком маленький (меньше 100 байт - это не mp3)
+                    if len(content_bytes) < 100:
+                        logger.error(f"TTS Error: File too small ({len(content_bytes)} bytes)")
+                        return None
+
+                    # Если все проверки пройдены
+                    logger.info(f"✅ TTS Success: Valid Audio received ({len(content_bytes)} bytes)")
+                    return content_bytes
+                
                 else:
-                    logger.error(f"TTS Error {resp.status_code}: {resp.text}")
+                    logger.error(f"TTS HTTP Error {resp.status_code}: {resp.text}")
                     return None
+                    
         except Exception as e:
             logger.error(f"Audio Studio Connection Error: {e}")
             return None
@@ -63,11 +84,14 @@ class AudioStudio:
         }
         
         try:
-            # Тоже используем curl_cffi для надежности
-            async with AsyncSession(impersonate="chrome110") as session:
+            async with AsyncSession(impersonate="safari15_5") as session:
                 resp = await session.post(url, json=payload, headers=self.headers)
                 
                 if resp.status_code == 200:
+                    # Валидация для SFX
+                    if resp.content.startswith(b"{") or resp.content.startswith(b"<"):
+                         logger.error("SFX Error: Not an audio file")
+                         return None
                     return resp.content
                 else:
                     logger.error(f"SFX Error {resp.status_code}: {resp.text}")
