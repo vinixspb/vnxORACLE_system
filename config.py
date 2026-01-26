@@ -8,6 +8,7 @@ load_dotenv()
 # =========================================================
 BOT_TOKEN_ORACLE = os.getenv("BOT_TOKEN_ORACLE")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID") 
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
