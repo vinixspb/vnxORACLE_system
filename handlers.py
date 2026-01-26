@@ -2,6 +2,7 @@ import os
 import logging
 import random
 import aiohttp
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -80,9 +81,10 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка нейро-интерфейса.")
     finally:
-        # Всегда удаляем временное изображение после обработки
+        # Безопасное удаление временного файла
         if image_path and os.path.exists(image_path):
-            os.remove(image_path)
+            try: os.remove(image_path)
+            except: pass
 
 # --- МУЛЬТИМЕДИА ХЕНДЛЕРЫ ---
 
@@ -95,13 +97,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("🧬 <b>VISION MODULE</b>\n\nАнализ доступен на тарифах <b>PRO</b> и <b>NEO</b>.", parse_mode='HTML')
 
     caption = update.message.caption or "Что на этом изображении?"
-    photo = update.message.photo[-1] # Самое высокое разрешение
+    photo = update.message.photo[-1]
     
     try:
         photo_file = await context.bot.get_file(photo.file_id)
-        temp_path = os.path.join(DOWNLOADS_DIR, f"vision_{user_id}.jpg")
+        # Уникальное имя для предотвращения конфликтов при массовой загрузке
+        temp_path = os.path.join(DOWNLOADS_DIR, f"vision_{user_id}_{int(time.time())}.jpg")
         await photo_file.download_to_drive(temp_path)
-        
         await process_ai_request(update, context, caption, image_path=temp_path)
     except Exception as e:
         logger.error(f"Vision Error: {e}")
@@ -115,7 +117,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
     try:
         voice_file = await context.bot.get_file(update.message.voice.file_id)
-        file_path = os.path.join(DOWNLOADS_DIR, f"v_{user_id}.ogg")
+        file_path = os.path.join(DOWNLOADS_DIR, f"v_{user_id}_{int(time.time())}.ogg")
         await voice_file.download_to_drive(file_path)
         
         transcript = await ai_engine.transcribe_audio(file_path)
@@ -126,6 +128,19 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await process_ai_request(update, context, f"[Audio Input]: {transcript}")
     except Exception as e:
         logger.error(f"Voice Error: {e}")
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Архивация объектов в канал Хранителя (The Vault)"""
+    if config.ARCHIVE_CHANNEL_ID:
+        try:
+            await context.bot.forward_message(
+                chat_id=config.ARCHIVE_CHANNEL_ID, 
+                from_chat_id=update.effective_chat.id, 
+                message_id=update.message.message_id
+            )
+            await update.message.reply_text("✅ <b>Объект сохранен в Хранилище.</b>", parse_mode='HTML')
+        except Exception as e:
+            logger.error(f"Vault Error: {e}")
 
 # --- ОСНОВНЫЕ КОМАНДЫ ---
 
@@ -152,10 +167,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if mode == 'sfx_wait':
         await handle_sfx_request(update, context, text)
-        context.user_data['mode'] = None # Сброс режима для звуков
+        context.user_data['mode'] = None 
         return
 
-    # Обработка системных кнопок из конфига
+    # Системные кнопки
     if text == config.BTN_TARIFFS:
         msg = "💳 <b>ТАРИФНЫЕ ПЛАНЫ</b>\n\n💠 <b>START:</b> 190₽\n⚡️ <b>PRO:</b> 590₽\n🧬 <b>NEO:</b> 990₽"
         await update.message.reply_text(msg, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
@@ -180,7 +195,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await generate_image(update, context, text[5:])
         return
 
-    # Обычный запрос к ИИ
     await process_ai_request(update, context, text)
 
 # --- CALLBACK HANDLING ---
@@ -247,14 +261,12 @@ async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     voice = context.user_data.get('voice_id', config.DEFAULT_VOICE)
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
-    # Вызов гибридной студии
     audio_data, engine, is_fallback = await audio_studio.text_to_speech(text, voice)
     
     if audio_data:
         warn = "⚠️ <i>Резервный ИИ (OpenAI)</i>\n" if is_fallback else ""
         caption = f"🎙 <b>Голос синтезирован!</b>\n\n{warn}<blockquote>⚙️ {engine} | 🎫 {len(text)} Chars | ∑ {db.get_total_tokens(user_id)}</blockquote>"
         
-        # Навигация после озвучки
         keyboard = [[
             InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again"),
             InlineKeyboardButton("💬 В новый чат", callback_data="mode_chat_reset")
