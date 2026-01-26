@@ -13,7 +13,7 @@ import keyboards
 
 logger = logging.getLogger(__name__)
 
-# --- ВСПОМОГАТЕЛЬНЫЕ ---
+# --- Вспомогательные функции ---
 async def send_paywall(update: Update):
     await update.message.reply_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
 
@@ -76,45 +76,39 @@ async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     user_id = update.effective_user.id
     selected_voice = context.user_data.get('voice_id', config.DEFAULT_VOICE)
     
-    await update.message.reply_text(f"🗣 <b>Генерирую голос...</b>", parse_mode='HTML')
+    await update.message.reply_text("🗣 <b>Синтез речи...</b>", parse_mode='HTML')
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
-    # Получаем аудио и имя движка (ElevenLabs или OpenAI)
-    audio_data, engine_name = await audio_studio.text_to_speech(text, voice_id=selected_voice)
+    # Извлекаем три значения из обновленной студии
+    audio_data, engine_name, is_fallback = await audio_studio.text_to_speech(text, voice_id=selected_voice)
     
     if audio_data:
         chars_count = len(text)
-        footer = f"\n\n<blockquote>⚙️ {engine_name} | 🎫 {chars_count} Chars | ∑ {db.get_total_tokens(user_id)}</blockquote>"
+        # Предупреждение о резерве
+        warn_text = "⚠️ <i>Используется резервный ИИ</i>\n" if is_fallback else ""
+        footer = f"\n\n{warn_text}<blockquote>⚙️ {engine_name} | 🎫 {chars_count} | ∑ {db.get_total_tokens(user_id)}</blockquote>"
         
-        # Кнопки быстрого переключения
         keyboard = [
             [
                 InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again"),
-                InlineKeyboardButton("💬 В обычный чат", callback_data="mode_chat_reset")
+                InlineKeyboardButton("💬 В новый чат", callback_data="mode_chat_reset")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        try:
-            await update.message.reply_voice(
-                voice=audio_data, 
-                caption=f"🎙 <b>Голос синтезирован!</b>{footer}", 
-                parse_mode='HTML',
-                reply_markup=reply_markup
-            )
-        except BadRequest as e:
-            if "Voice_messages_forbidden" in str(e):
-                await update.message.reply_audio(
-                    audio=audio_data, 
-                    title="vnxORACLE_Voice",
-                    caption=f"⚠️ <i>Голосовые запрещены, отправляю файлом.</i>{footer}",
-                    parse_mode='HTML',
-                    reply_markup=reply_markup
-                )
+        # Отправляем именно как AUDIO для поддержки "трех точек" и скачивания
+        await update.message.reply_audio(
+            audio=audio_data,
+            title=f"vnxORACLE Voice ({engine_name})",
+            performer="vnxORACLE",
+            caption=f"🎙 <b>Готово!</b>{footer}",
+            parse_mode='HTML',
+            reply_markup=reply_markup
+        )
         
         db.update_tokens(user_id, chars_count)
     else:
-        await update.message.reply_text("⚠️ Ошибка генерации голоса.")
+        await update.message.reply_text("❌ Ошибка синтеза. API недоступен.")
 
 async def handle_sfx_request(update: Update, context: ContextTypes.DEFAULT_TYPE, description: str):
     user_id = update.effective_user.id
@@ -156,11 +150,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     current_mode = context.user_data.get('mode')
     
-    # Режим ожидания текста для озвучки
     if current_mode == 'tts_wait':
         if not user_tariff: return await send_paywall(update)
         await handle_tts_request(update, context, text)
-        return # Режим не сбрасываем автоматически для удобства серии запросов
+        return 
 
     if current_mode == 'sfx_wait':
         if not user_tariff: return await send_paywall(update)
@@ -243,11 +236,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Навигация аудио-режима
     if data == "audio_tts_again":
         context.user_data['mode'] = 'tts_wait'
-        await query.message.reply_text("🎤 <b>Режим озвучки активен.</b> Пришлите текст:", parse_mode='HTML')
+        await query.message.reply_text("🎤 <b>Режим озвучки активен.</b>\nПришлите следующий текст:", parse_mode='HTML')
         answered = True
+
     elif data == "mode_chat_reset":
         context.user_data['mode'] = None
-        await query.message.reply_text("💬 <b>Режим чата восстановлен.</b>", parse_mode='HTML')
+        # Создаем НОВУЮ сессию для чистого чата
+        db.create_session(user_id, title="Новый диалог")
+        await query.message.reply_text("💬 <b>Текстовый чат (Новая сессия)</b>\nПишите ваш запрос:", parse_mode='HTML')
         answered = True
 
     elif data == "back_to_features":
@@ -266,16 +262,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = 'tts_wait'
         await query.answer("🎙 Голос выбран")
         answered = True
-        await query.message.reply_text("🗣 <b>ОТЛИЧНО!</b> Напишите текст для озвучки.", parse_mode='HTML')
+        await query.message.reply_text("🗣 <b>ОТЛИЧНО!</b>\nНапишите текст для озвучки.", parse_mode='HTML')
     elif data == "audio_sfx":
         await query.answer("🔊 Режим звуков")
         answered = True
         context.user_data['mode'] = 'sfx_wait'
-        await query.message.reply_text("🔊 <b>ГЕНЕРАТОР SFX:</b> Опишите звук на английском.", parse_mode='HTML')
+        await query.message.reply_text("🔊 <b>ГЕНЕРАТОР SFX:</b>\nОпишите звук на английском.", parse_mode='HTML')
     elif data == "audio_transcribe":
         await query.answer("🎙 Режим транскрибации")
         answered = True
-        await query.message.reply_text("📝 <b>ТРАНСКРИБАЦИЯ:</b> Отправьте голосовое сообщение.", parse_mode='HTML')
+        await query.message.reply_text("📝 <b>ТРАНСКРИБАЦИЯ:</b>\nОтправьте голосовое сообщение.", parse_mode='HTML')
     elif data.startswith("setmodel_"):
         new_model_id = data.split("setmodel_")[1]
         USER_MODELS[user_id] = new_model_id
