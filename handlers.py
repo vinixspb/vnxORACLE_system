@@ -70,7 +70,7 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка связи.")
 
-# --- АУДИО ИНСТРУМЕНТЫ С ПОДВАЛОМ И НАВИГАЦИЕЙ ---
+# --- АУДИО ФУНКЦИИ С НАВИГАЦИЕЙ ---
 
 async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     user_id = update.effective_user.id
@@ -79,14 +79,14 @@ async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await update.message.reply_text(f"🗣 <b>Генерирую голос...</b>", parse_mode='HTML')
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
-    audio_data = await audio_studio.text_to_speech(text, voice_id=selected_voice)
+    # Получаем аудио и имя движка (ElevenLabs или OpenAI)
+    audio_data, engine_name = await audio_studio.text_to_speech(text, voice_id=selected_voice)
     
     if audio_data:
-        # Формируем подвал
         chars_count = len(text)
-        footer = f"\n\n<blockquote>⚙️ Audio Engine | 🎫 {chars_count} Chars | ∑ {db.get_total_tokens(user_id)}</blockquote>"
+        footer = f"\n\n<blockquote>⚙️ {engine_name} | 🎫 {chars_count} Chars | ∑ {db.get_total_tokens(user_id)}</blockquote>"
         
-        # Кнопки навигации
+        # Кнопки быстрого переключения
         keyboard = [
             [
                 InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again"),
@@ -112,10 +112,9 @@ async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
                     reply_markup=reply_markup
                 )
         
-        # Обновляем статистику (считаем символы как токены для аудио)
         db.update_tokens(user_id, chars_count)
     else:
-        await update.message.reply_text("⚠️ Ошибка генерации голоса (API Error).")
+        await update.message.reply_text("⚠️ Ошибка генерации голоса.")
 
 async def handle_sfx_request(update: Update, context: ContextTypes.DEFAULT_TYPE, description: str):
     user_id = update.effective_user.id
@@ -157,12 +156,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     current_mode = context.user_data.get('mode')
     
+    # Режим ожидания текста для озвучки
     if current_mode == 'tts_wait':
         if not user_tariff: return await send_paywall(update)
         await handle_tts_request(update, context, text)
-        # Мы НЕ сбрасываем режим здесь, чтобы можно было слать текст один за другим
-        # Режим сбросится только кнопкой "В обычный чат" или системной кнопкой
-        return
+        return # Режим не сбрасываем автоматически для удобства серии запросов
 
     if current_mode == 'sfx_wait':
         if not user_tariff: return await send_paywall(update)
@@ -242,25 +240,58 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     answered = False
 
-    # --- НАВИГАЦИЯ ПОСЛЕ ОЗВУЧКИ ---
+    # Навигация аудио-режима
     if data == "audio_tts_again":
         context.user_data['mode'] = 'tts_wait'
-        await query.message.reply_text("🎤 <b>Режим озвучки продлен.</b>\nПришлите следующий текст:", parse_mode='HTML')
+        await query.message.reply_text("🎤 <b>Режим озвучки активен.</b> Пришлите текст:", parse_mode='HTML')
         answered = True
-
     elif data == "mode_chat_reset":
         context.user_data['mode'] = None
         await query.message.reply_text("💬 <b>Режим чата восстановлен.</b>", parse_mode='HTML')
         answered = True
 
-    # --- СТАНДАРТНАЯ НАВИГАЦИЯ ---
     elif data == "back_to_features":
         await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
         context.user_data['mode'] = None
-    
     elif data == "feature_text":
         curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
         await query.edit_message_text("💡 <b>ВЫБЕРИТЕ НЕЙРОСЕТЬ:</b>", reply_markup=keyboards.get_models_keyboard(curr), parse_mode='HTML')
-    
     elif data == "feature_audio":
-        await query.edit_message_text("🎤 <b>АУДИО И
+        await query.edit_message_text("🎤 <b>АУДИО ИИ (BETA):</b>\nВыберите инструмент:", reply_markup=keyboards.get_audio_keyboard(), parse_mode='HTML')
+    elif data == "audio_tts":
+        await query.edit_message_text("🗣 <b>ВЫБЕРИТЕ ГОЛОС:</b>", reply_markup=keyboards.get_voice_selection_keyboard(), parse_mode='HTML')
+        answered = True
+    elif data.startswith("setvoice_"):
+        context.user_data['voice_id'] = data.split("setvoice_")[1]
+        context.user_data['mode'] = 'tts_wait'
+        await query.answer("🎙 Голос выбран")
+        answered = True
+        await query.message.reply_text("🗣 <b>ОТЛИЧНО!</b> Напишите текст для озвучки.", parse_mode='HTML')
+    elif data == "audio_sfx":
+        await query.answer("🔊 Режим звуков")
+        answered = True
+        context.user_data['mode'] = 'sfx_wait'
+        await query.message.reply_text("🔊 <b>ГЕНЕРАТОР SFX:</b> Опишите звук на английском.", parse_mode='HTML')
+    elif data == "audio_transcribe":
+        await query.answer("🎙 Режим транскрибации")
+        answered = True
+        await query.message.reply_text("📝 <b>ТРАНСКРИБАЦИЯ:</b> Отправьте голосовое сообщение.", parse_mode='HTML')
+    elif data.startswith("setmodel_"):
+        new_model_id = data.split("setmodel_")[1]
+        USER_MODELS[user_id] = new_model_id
+        model_name = new_model_id.split("/")[-1].replace(":free", "")
+        await query.answer(f"🧠 {model_name} активирована")
+        answered = True
+        await query.edit_message_text(f"✅ <b>Модель изменена:</b> {model_name}", parse_mode='HTML')
+    elif data.startswith("session_"):
+        if db.activate_session(user_id, int(data.split("_")[1])):
+            await query.answer() 
+            answered = True
+            await query.message.reply_text(f"📂 <b>Чат загружен.</b>", parse_mode='HTML')
+    elif data.startswith("buy_"):
+        plan = data.split("_")[1]
+        await query.edit_message_text(f"{config.TARIFF_INFO[plan]}\n\n💳 <b>Оплата:</b> {config.PAYMENT_INFO}", parse_mode='HTML')
+    
+    if not answered:
+        try: await query.answer()
+        except: pass
