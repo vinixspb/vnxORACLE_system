@@ -208,7 +208,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == config.BTN_NEW_DIALOG:
         db.create_session(user_id, title="Новый диалог")
-        # --- ТЕКСТ СОГЛАСОВАН И ВОЗВРАЩЕН ---
         await update.message.reply_text("♻️ <b>Новый диалог создан.</b>", parse_mode='HTML')
         return
 
@@ -330,19 +329,25 @@ async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     voice = context.user_data.get('voice_id', config.DEFAULT_VOICE)
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
+    # Генерация аудио
     audio_data, engine, is_fallback = await audio_studio.text_to_speech(text, voice)
     
     if audio_data:
         warn = "⚠️ <i>Резервный ИИ (OpenAI)</i>\n" if is_fallback else ""
         caption = f"🎙 <b>Голос синтезирован!</b>\n\n{warn}<blockquote>⚙️ {engine} | 🎫 {len(text)} Chars</blockquote>"
         
-        keyboard = [[
-            InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again"),
-            InlineKeyboardButton("💬 В новый чат", callback_data="mode_chat_reset")
-        ]]
+        # ВЕРТИКАЛЬНАЯ раскладка кнопок (для мобильных)
+        keyboard = [
+            [InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again")],
+            [InlineKeyboardButton("💬 В новый чат", callback_data="mode_chat_reset")]
+        ]
         
+        # Отправляем как АУДИОФАЙЛ (с filename=...mp3), чтобы включился плеер и "3 точки"
         await update.message.reply_audio(
             audio=audio_data, 
+            filename=f"vnxORACLE_Voice_{int(time.time())}.mp3",
+            title=f"Voice Message",
+            performer="vnxORACLE AI",
             caption=caption, 
             parse_mode='HTML', 
             reply_markup=InlineKeyboardMarkup(keyboard)
