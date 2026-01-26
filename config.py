@@ -14,7 +14,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # Ключ для Whisper (прямой OpenAI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 
-# Ключ для ElevenLabs (Озвучка)
+# 👇 НОВОЕ: Ключ для ElevenLabs (Озвучка)
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID") 
@@ -49,10 +49,11 @@ LIMITS = {
     "NEO": 60
 }
 
-# --- НАСТРОЙКИ ГОЛОСА (ELEVENLABS) ---
+# 👇 НОВОЕ: НАСТРОЙКИ ГОЛОСА (ELEVENLABS)
 # ID можно брать из библиотеки ElevenLabs
 VOICE_ADAM = "pNInz6obpgDQGcFmaJgB"    # Глубокий мужской (Adam Legacy)
 VOICE_RACHEL = "21m00Tcm4TlvDq8ikWAM"  # Женский (Rachel)
+
 DEFAULT_VOICE = VOICE_ADAM
 
 # --- ОПИСАНИЯ ТАРИФОВ ---
