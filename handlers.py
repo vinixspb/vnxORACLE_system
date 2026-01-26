@@ -3,6 +3,8 @@ import logging
 import random
 import aiohttp
 from telegram import Update
+# 👇 Добавляем импорт ошибки
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from telegram.constants import ChatAction
 
@@ -73,20 +75,33 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     user_id = update.effective_user.id
-    
-    # Получаем выбранный голос или ставим Адама по умолчанию
     selected_voice = context.user_data.get('voice_id', config.DEFAULT_VOICE)
     
     await update.message.reply_text(f"🗣 <b>Генерирую голос...</b>\nТекст: <i>{text[:50]}...</i>", parse_mode='HTML')
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
-    # Передаем ID голоса в функцию
     audio_data = await audio_studio.text_to_speech(text, voice_id=selected_voice)
     
     if audio_data:
-        await update.message.reply_voice(voice=audio_data, caption="🎙 <b>Voice by ElevenLabs</b>", parse_mode='HTML')
+        try:
+            # Пытаемся отправить как Голосовое (Bubble)
+            await update.message.reply_voice(voice=audio_data, caption="🎙 <b>Voice by ElevenLabs</b>", parse_mode='HTML')
+        except BadRequest as e:
+            # 👇 ЛОВИМ ОШИБКУ ПРИВАТНОСТИ
+            if "Voice_messages_forbidden" in str(e):
+                # Отправляем как Аудиофайл (Music Track) - это обычно разрешено
+                await update.message.reply_audio(
+                    audio=audio_data, 
+                    title="ElevenLabs Voice",
+                    performer="vnxORACLE",
+                    caption="⚠️ <i>Голосовые сообщения у вас запрещены, отправляю файлом.</i>", 
+                    parse_mode='HTML'
+                )
+            else:
+                logger.error(f"Telegram Send Error: {e}")
+                await update.message.reply_text("⚠️ Ошибка отправки в Telegram.")
     else:
-        await update.message.reply_text("⚠️ Ошибка генерации голоса. (Возможна блокировка региона или лимиты).")
+        await update.message.reply_text("⚠️ Ошибка генерации голоса (API Error).")
 
 async def handle_sfx_request(update: Update, context: ContextTypes.DEFAULT_TYPE, description: str):
     user_id = update.effective_user.id
@@ -221,15 +236,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("🎨 <b>ДИЗАЙН:</b>\nПишите <code>/img [описание]</code>", parse_mode='HTML')
 
     elif data == "audio_tts":
-        # 👉 ОТКРЫВАЕМ ВЫБОР ГОЛОСА
         await query.edit_message_text("🗣 <b>ВЫБЕРИТЕ ГОЛОС:</b>", reply_markup=keyboards.get_voice_selection_keyboard(), parse_mode='HTML')
         answered = True
 
-    # 👉 ОБРАБОТКА ВЫБОРА ГОЛОСА
     elif data.startswith("setvoice_"):
         voice_id = data.split("setvoice_")[1]
-        context.user_data['voice_id'] = voice_id # Запоминаем выбор
-        context.user_data['mode'] = 'tts_wait' # Включаем режим ожидания текста
+        context.user_data['voice_id'] = voice_id
+        context.user_data['mode'] = 'tts_wait'
         
         await query.answer("🎙 Голос выбран")
         answered = True
