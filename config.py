@@ -7,80 +7,43 @@ load_dotenv()
 # 🔐 СИСТЕМНЫЕ НАСТРОЙКИ
 # =========================================================
 BOT_TOKEN_ORACLE = os.getenv("BOT_TOKEN_ORACLE")
-
-# Ключ для текстовых моделей (Claude, GPT-4o через роутер)
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
-
-# Ключ для Whisper (прямой OpenAI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
-
-# 👇 НОВОЕ: Ключ для ElevenLabs (Озвучка)
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID") 
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
-
-# 🏛 АРХИВ
 archive_id_str = os.getenv("ARCHIVE_CHANNEL_ID")
 ARCHIVE_CHANNEL_ID = int(archive_id_str) if archive_id_str else 0
-
-# Реквизиты
 PAYMENT_INFO = "USDT (TRC20): T..........................." 
 ADMIN_CONTACT = "@vinixspb"
 
 # =========================================================
 # ⚙️ МОЗГ И МОДЕЛИ
 # =========================================================
-# 1. Основные (Платные/Лимитированные)
 MODEL_BASIC = "openai/gpt-4o-mini"
 MODEL_PRO = "openai/gpt-4o"
 MODEL_NEO = "anthropic/claude-3.5-sonnet"
-
-# 2. Новые (Бесплатные / Free Tier)
-MODEL_DEVSTRAL = "mistralai/devstral-2512:free"        # Код + Агент
-MODEL_CHIMERA = "tngtech/deepseek-r1t2-chimera:free"   # Логика (DeepSeek V3 + R1)
-MODEL_LIQUID = "liquid/lfm-2.5-1.2b-instruct:free"     # Быстрый чат
+MODEL_DEVSTRAL = "mistralai/devstral-2512:free"
+MODEL_CHIMERA = "tngtech/deepseek-r1t2-chimera:free"
+MODEL_LIQUID = "liquid/lfm-2.5-1.2b-instruct:free"
 
 DEFAULT_MODEL = MODEL_BASIC
 
-LIMITS = {
-    "START": 10,
-    "PRO": 30,
-    "NEO": 60
-}
+LIMITS = {"START": 10, "PRO": 30, "NEO": 60}
 
-# 👇 НОВОЕ: НАСТРОЙКИ ГОЛОСА (ELEVENLABS)
-# ID можно брать из библиотеки ElevenLabs
-VOICE_ADAM = "pNInz6obpgDQGcFmaJgB"    # Глубокий мужской (Adam Legacy)
-VOICE_RACHEL = "21m00Tcm4TlvDq8ikWAM"  # Женский (Rachel)
+# 👇 НАСТРОЙКИ ГОЛОСА (ELEVENLABS)
+VOICE_ADAM = "pNInz6obpgDQGcFmaJgB"    # Глубокий мужской (Deep)
+VOICE_RACHEL = "21m00Tcm4TlvDq8ikWAM"  # Женский (American, Calm)
+VOICE_FIN = "D38z5RcWu1voky8WSVqt"     # Энергичный мужской (Irish)
+VOICE_MIMI = "zrHiDhphv9ZnVXBqCLjz"    # Детский / Милый (Australian)
 
 DEFAULT_VOICE = VOICE_ADAM
 
 # --- ОПИСАНИЯ ТАРИФОВ ---
 TARIFF_INFO = {
-    "START": (
-        "💠 <b>TARIFF: START</b>\n"
-        "<i>(Первые 2 месяца — БЕСПЛАТНО)</i>\n"
-        "├ Модель: GPT-4o Mini\n"
-        "├ Память: 10 сообщений\n"
-        "├ Лимит: 100,000 токенов/мес\n"
-        "└ Цена: 190₽ / мес"
-    ),
-    "PRO": (
-        "⚡️ <b>TARIFF: PRO</b>\n"
-        "├ Модель: GPT-4o (Flagship)\n"
-        "├ Память: 30 сообщений\n"
-        "├ Лимит: 500,000 токенов/мес\n"
-        "└ Цена: 590₽ / мес"
-    ),
-    "NEO": (
-        "🧬 <b>TARIFF: NEO (EVOLUTION)</b>\n"
-        "├ Модель: Claude 3.5 Sonnet\n"
-        "├ Память: 60 сообщений\n"
-        "├ Coding: MAX Level\n"
-        "├ Лимит: 1,000,000 токенов/мес\n"
-        "└ Цена: 990₽ / мес"
-    )
+    "START": ("💠 <b>TARIFF: START</b>\n<i>(Первые 2 месяца — БЕСПЛАТНО)</i>\n├ Модель: GPT-4o Mini\n├ Память: 10 сообщений\n├ Лимит: 100,000 токенов/мес\n└ Цена: 190₽ / мес"),
+    "PRO": ("⚡️ <b>TARIFF: PRO</b>\n├ Модель: GPT-4o (Flagship)\n├ Память: 30 сообщений\n├ Лимит: 500,000 токенов/мес\n└ Цена: 590₽ / мес"),
+    "NEO": ("🧬 <b>TARIFF: NEO (EVOLUTION)</b>\n├ Модель: Claude 3.5 Sonnet\n├ Память: 60 сообщений\n├ Coding: MAX Level\n├ Лимит: 1,000,000 токенов/мес\n└ Цена: 990₽ / мес")
 }
 
 SYSTEM_PROMPT = (
@@ -108,22 +71,6 @@ BTN_HELP = "🆘 Поддержка"
 # =========================================================
 # 💬 СООБЩЕНИЯ
 # =========================================================
-MSG_WELCOME = (
-    "👁 <b>vnxORACLE SYSTEM</b>\n\n"
-    "Добро пожаловать в систему.\n"
-    "Я — интерфейс чистого знания.\n\n"
-    "Доступ открыт через шлюз: @vnxMATRIX_Gateway_bot\n"
-    "<i>Ожидание команды...</i>"
-)
-
-MSG_NO_SUB = (
-    "⛔️ <b>ДОСТУП ОГРАНИЧЕН</b>\n\n"
-    "Ваш нейро-линк не активен.\n"
-    "Для подключения к Системе выберите уровень доступа:"
-)
-
-MSG_SUPPORT = (
-    "🆘 <b>ПОДДЕРЖКА АРХИТЕКТОРА</b>\n\n"
-    "Если возникли сбои в Матрице или вопросы по оплате:\n"
-    "👨‍💻 @vinixspb"
-)
+MSG_WELCOME = "👁 <b>vnxORACLE SYSTEM</b>\n\nДобро пожаловать в систему.\nЯ — интерфейс чистого знания.\n\nДоступ открыт через шлюз: @vnxMATRIX_Gateway_bot\n<i>Ожидание команды...</i>"
+MSG_NO_SUB = "⛔️ <b>ДОСТУП ОГРАНИЧЕН</b>\n\nВаш нейро-линк не активен.\nДля подключения к Системе выберите уровень доступа:"
+MSG_SUPPORT = "🆘 <b>ПОДДЕРЖКА АРХИТЕКТОРА</b>\n\nЕсли возникли сбои в Матрице или вопросы по оплате:\n👨‍💻 @vinixspb"
