@@ -23,7 +23,7 @@ def get_features_keyboard():
     keyboard = [
         [
             InlineKeyboardButton("💡 Выбор Нейросети", callback_data="feature_text"),
-            InlineKeyboardButton("🎤 Аудио-Студия", callback_data="feature_audio")
+            InlineKeyboardButton("🎤 Аудио ИИ", callback_data="feature_audio")
         ],
         [
             InlineKeyboardButton("🎨 Дизайн с ИИ", callback_data="feature_design"),
@@ -38,7 +38,7 @@ def get_features_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_audio_keyboard():
-    """Новое меню аудио-инструментов"""
+    """Меню аудио-инструментов"""
     keyboard = [
         [
             InlineKeyboardButton("🗣 ElevenLabs Voice", callback_data="audio_tts"),
@@ -57,18 +57,26 @@ def get_audio_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def get_voice_selection_keyboard():
+    """Выбор голоса для озвучки"""
+    keyboard = [
+        [InlineKeyboardButton("👨‍💼 Adam (Deep Male)", callback_data=f"setvoice_{config.VOICE_ADAM}")],
+        [InlineKeyboardButton("👩‍💼 Rachel (Calm Female)", callback_data=f"setvoice_{config.VOICE_RACHEL}")],
+        [InlineKeyboardButton("🧔 Fin (Energetic)", callback_data=f"setvoice_{config.VOICE_FIN}")],
+        [InlineKeyboardButton("👧 Mimi (Cute)", callback_data=f"setvoice_{config.VOICE_MIMI}")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="feature_audio")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 def get_models_keyboard(current_model):
     models = [
         ("GPT-4o Mini", config.MODEL_BASIC),
         ("Mistral Devstral (Free)", config.MODEL_DEVSTRAL),
-        
         ("GPT-4o (Pro)", config.MODEL_PRO),
         ("R1T2 Chimera (Free)", config.MODEL_CHIMERA),
-        
         ("Claude 3.5 Sonnet", config.MODEL_NEO),
         ("Liquid LFM 2.5 (Free)", config.MODEL_LIQUID)
     ]
-    
     keyboard = []
     row = []
     for name, code in models:
@@ -77,17 +85,13 @@ def get_models_keyboard(current_model):
         if len(row) == 2:
             keyboard.append(row)
             row = []
-    if row:
-        keyboard.append(row)
-        
+    if row: keyboard.append(row)
     keyboard.append([InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_history_keyboard(user_id, mode="view"):
     sessions = db.get_user_sessions(user_id, limit=10)
-    if not sessions: 
-        return None
-    
+    if not sessions: return None
     keyboard = []
     if mode == "view":
         for s in sessions:
@@ -95,11 +99,9 @@ def get_history_keyboard(user_id, mode="view"):
             title_text = f"📂 {s['title']} ({date_short})"
             keyboard.append([InlineKeyboardButton(text=title_text, callback_data=f"session_{s['id']}")])
         keyboard.append([InlineKeyboardButton(text="🗑 УПРАВЛЕНИЕ АРХИВОМ", callback_data="history_manage")])
-    
     elif mode == "delete":
         for s in sessions:
             title_text = f"❌ Стереть: {s['title']}"
             keyboard.append([InlineKeyboardButton(text=title_text, callback_data=f"del_{s['id']}")])
         keyboard.append([InlineKeyboardButton(text="🔙 НАЗАД", callback_data="history_back")])
-        
     return InlineKeyboardMarkup(keyboard)
