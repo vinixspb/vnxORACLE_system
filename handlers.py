@@ -2,8 +2,7 @@ import os
 import logging
 import random
 import aiohttp
-from telegram import Update
-# 👇 Добавляем импорт ошибки
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from telegram.constants import ChatAction
@@ -71,47 +70,69 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         logger.error(f"AI Error: {e}")
         await update.message.reply_text("⚠️ Ошибка связи.")
 
-# --- НОВЫЕ АУДИО ФУНКЦИИ ---
+# --- АУДИО ИНСТРУМЕНТЫ С ПОДВАЛОМ И НАВИГАЦИЕЙ ---
 
 async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     user_id = update.effective_user.id
     selected_voice = context.user_data.get('voice_id', config.DEFAULT_VOICE)
     
-    await update.message.reply_text(f"🗣 <b>Генерирую голос...</b>\nТекст: <i>{text[:50]}...</i>", parse_mode='HTML')
+    await update.message.reply_text(f"🗣 <b>Генерирую голос...</b>", parse_mode='HTML')
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
     audio_data = await audio_studio.text_to_speech(text, voice_id=selected_voice)
     
     if audio_data:
+        # Формируем подвал
+        chars_count = len(text)
+        footer = f"\n\n<blockquote>⚙️ Audio Engine | 🎫 {chars_count} Chars | ∑ {db.get_total_tokens(user_id)}</blockquote>"
+        
+        # Кнопки навигации
+        keyboard = [
+            [
+                InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again"),
+                InlineKeyboardButton("💬 В обычный чат", callback_data="mode_chat_reset")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
         try:
-            # Пытаемся отправить как Голосовое (Bubble)
-            await update.message.reply_voice(voice=audio_data, caption="🎙 <b>Voice by ElevenLabs</b>", parse_mode='HTML')
+            await update.message.reply_voice(
+                voice=audio_data, 
+                caption=f"🎙 <b>Голос синтезирован!</b>{footer}", 
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
         except BadRequest as e:
-            # 👇 ЛОВИМ ОШИБКУ ПРИВАТНОСТИ
             if "Voice_messages_forbidden" in str(e):
-                # Отправляем как Аудиофайл (Music Track) - это обычно разрешено
                 await update.message.reply_audio(
                     audio=audio_data, 
-                    title="ElevenLabs Voice",
-                    performer="vnxORACLE",
-                    caption="⚠️ <i>Голосовые сообщения у вас запрещены, отправляю файлом.</i>", 
-                    parse_mode='HTML'
+                    title="vnxORACLE_Voice",
+                    caption=f"⚠️ <i>Голосовые запрещены, отправляю файлом.</i>{footer}",
+                    parse_mode='HTML',
+                    reply_markup=reply_markup
                 )
-            else:
-                logger.error(f"Telegram Send Error: {e}")
-                await update.message.reply_text("⚠️ Ошибка отправки в Telegram.")
+        
+        # Обновляем статистику (считаем символы как токены для аудио)
+        db.update_tokens(user_id, chars_count)
     else:
         await update.message.reply_text("⚠️ Ошибка генерации голоса (API Error).")
 
 async def handle_sfx_request(update: Update, context: ContextTypes.DEFAULT_TYPE, description: str):
     user_id = update.effective_user.id
-    await update.message.reply_text(f"🔊 <b>Синтезирую звук...</b>\nЗапрос: <i>{description}</i>", parse_mode='HTML')
+    await update.message.reply_text(f"🔊 <b>Синтезирую звук...</b>", parse_mode='HTML')
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_VOICE)
     
     sfx_data = await audio_studio.generate_sfx(description)
     
     if sfx_data:
-        await update.message.reply_audio(audio=sfx_data, title="SFX Generated", performer="vnxORACLE", caption=f"🔊 {description}")
+        footer = f"\n\n<blockquote>⚙️ SFX Gen | 🎫 1 Unit | ∑ {db.get_total_tokens(user_id)}</blockquote>"
+        await update.message.reply_audio(
+            audio=sfx_data, 
+            title="SFX Generated", 
+            performer="vnxORACLE", 
+            caption=f"🔊 {description}{footer}",
+            parse_mode='HTML'
+        )
     else:
         await update.message.reply_text("⚠️ Ошибка генерации звука.")
 
@@ -139,7 +160,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if current_mode == 'tts_wait':
         if not user_tariff: return await send_paywall(update)
         await handle_tts_request(update, context, text)
-        context.user_data['mode'] = None 
+        # Мы НЕ сбрасываем режим здесь, чтобы можно было слать текст один за другим
+        # Режим сбросится только кнопкой "В обычный чат" или системной кнопкой
         return
 
     if current_mode == 'sfx_wait':
@@ -218,10 +240,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
-    
     answered = False
 
-    if data == "back_to_features":
+    # --- НАВИГАЦИЯ ПОСЛЕ ОЗВУЧКИ ---
+    if data == "audio_tts_again":
+        context.user_data['mode'] = 'tts_wait'
+        await query.message.reply_text("🎤 <b>Режим озвучки продлен.</b>\nПришлите следующий текст:", parse_mode='HTML')
+        answered = True
+
+    elif data == "mode_chat_reset":
+        context.user_data['mode'] = None
+        await query.message.reply_text("💬 <b>Режим чата восстановлен.</b>", parse_mode='HTML')
+        answered = True
+
+    # --- СТАНДАРТНАЯ НАВИГАЦИЯ ---
+    elif data == "back_to_features":
         await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
         context.user_data['mode'] = None
     
@@ -230,72 +263,4 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("💡 <b>ВЫБЕРИТЕ НЕЙРОСЕТЬ:</b>", reply_markup=keyboards.get_models_keyboard(curr), parse_mode='HTML')
     
     elif data == "feature_audio":
-        await query.edit_message_text("🎤 <b>АУДИО ИИ (BETA):</b>\nВыберите инструмент:", reply_markup=keyboards.get_audio_keyboard(), parse_mode='HTML')
-        
-    elif data == "feature_design":
-        await query.message.reply_text("🎨 <b>ДИЗАЙН:</b>\nПишите <code>/img [описание]</code>", parse_mode='HTML')
-
-    elif data == "audio_tts":
-        await query.edit_message_text("🗣 <b>ВЫБЕРИТЕ ГОЛОС:</b>", reply_markup=keyboards.get_voice_selection_keyboard(), parse_mode='HTML')
-        answered = True
-
-    elif data.startswith("setvoice_"):
-        voice_id = data.split("setvoice_")[1]
-        context.user_data['voice_id'] = voice_id
-        context.user_data['mode'] = 'tts_wait'
-        
-        await query.answer("🎙 Голос выбран")
-        answered = True
-        await query.message.reply_text("🗣 <b>ОТЛИЧНО!</b>\nТеперь напишите текст для озвучки.", parse_mode='HTML')
-
-    elif data == "audio_sfx":
-        await query.answer("🔊 Режим звуков")
-        answered = True
-        context.user_data['mode'] = 'sfx_wait'
-        await query.message.reply_text("🔊 <b>ГЕНЕРАТОР SFX:</b>\nОпишите звук на английском (например: <i>Laser blast, Footsteps on snow, Explosion</i>).", parse_mode='HTML')
-
-    elif data == "audio_transcribe":
-        await query.answer("🎙 Режим транскрибации")
-        answered = True
-        await query.message.reply_text("📝 <b>ТРАНСКРИБАЦИЯ:</b>\nПросто отправьте голосовое сообщение.", parse_mode='HTML')
-    
-    elif data in ["audio_suno", "audio_clone", "audio_vid2aud", "audio_eleven_music"]:
-        await query.answer("🚧 В разработке", show_alert=True)
-        answered = True
-
-    elif data == "history_manage":
-        markup = keyboards.get_history_keyboard(user_id, mode="delete")
-        await query.edit_message_text("🗑 <b>РЕЖИМ УДАЛЕНИЯ:</b>", reply_markup=markup, parse_mode='HTML')
-    
-    elif data == "history_back":
-        markup = keyboards.get_history_keyboard(user_id, mode="view")
-        await query.edit_message_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
-
-    elif data.startswith("setmodel_"):
-        new_model_id = data.split("setmodel_")[1]
-        USER_MODELS[user_id] = new_model_id
-        model_name = new_model_id.split("/")[-1].replace(":free", "")
-        await query.answer(f"🧠 {model_name} активирована")
-        answered = True
-        await query.edit_message_text(f"✅ <b>Модель изменена:</b> {model_name}", parse_mode='HTML')
-    
-    elif data.startswith("del_"):
-        if db.delete_session(user_id, int(data.split("_")[1])):
-            await query.answer("🗑 Удалено")
-            answered = True
-            markup = keyboards.get_history_keyboard(user_id, mode="delete")
-            if markup: await query.edit_message_reply_markup(reply_markup=markup)
-            else: await query.edit_message_text("📂 Архив пуст.")
-    
-    elif data.startswith("session_"):
-        if db.activate_session(user_id, int(data.split("_")[1])):
-            await query.answer() 
-            answered = True
-            await query.message.reply_text(f"📂 <b>Чат загружен.</b>", parse_mode='HTML')
-    
-    elif data.startswith("buy_"):
-        plan = data.split("_")[1]
-        await query.edit_message_text(f"{config.TARIFF_INFO[plan]}\n\n💳 <b>Оплата:</b> {config.PAYMENT_INFO}", parse_mode='HTML')
-    
-    if not answered:
-        await query.answer()
+        await query.edit_message_text("🎤 <b>АУДИО И
