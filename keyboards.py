@@ -2,6 +2,7 @@ from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, 
 import config
 from loader import db
 
+# --- ГЛАВНОЕ МЕНЮ (REPLY) ---
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_HISTORY)],
@@ -10,8 +11,8 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+# --- МЕНЮ ТАРИФОВ (INLINE) ---
 def get_subscription_keyboard():
-    """Инфо о ценах теперь в тексте хендлера, здесь только кнопки действий"""
     keyboard = [
         [
             InlineKeyboardButton("💳 Купить START", callback_data="buy_START"),
@@ -22,6 +23,7 @@ def get_subscription_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# --- МЕНЮ ВОЗМОЖНОСТЕЙ (ХАБ) ---
 def get_features_keyboard():
     keyboard = [
         [
@@ -40,6 +42,7 @@ def get_features_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# --- АУДИО-ИНСТРУМЕНТЫ ---
 def get_audio_keyboard():
     keyboard = [
         [
@@ -59,8 +62,28 @@ def get_audio_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# --- ВЫБОР ГОЛОСА (TTS) ---
+def get_voice_selection_keyboard(current_voice=None):
+    voices = [
+        ("Adam (Deep)", config.VOICE_ADAM),
+        ("Rachel (Soft)", config.VOICE_RACHEL),
+        ("Fin (Energy)", config.VOICE_FIN),
+        ("Mimi (High)", config.VOICE_MIMI)
+    ]
+    keyboard = []
+    row = []
+    for name, v_id in voices:
+        prefix = "✅ " if v_id == current_voice else "🎙 "
+        row.append(InlineKeyboardButton(prefix + name, callback_data=f"setvoice_{v_id}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row: keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="feature_audio")])
+    return InlineKeyboardMarkup(keyboard)
+
+# --- ВЫБОР МОДЕЛИ (LLM) ---
 def get_models_keyboard(current_model):
-    """Возвращаем метки (Free) для прозрачности"""
     models = [
         ("GPT-4o Mini", config.MODEL_BASIC),
         ("GPT-4o (Pro)", config.MODEL_PRO),
@@ -81,4 +104,30 @@ def get_models_keyboard(current_model):
     keyboard.append([InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")])
     return InlineKeyboardMarkup(keyboard)
 
-# get_voice_selection_keyboard и get_history_keyboard остаются без изменений
+# --- УПРАВЛЕНИЕ ИСТОРИЕЙ ---
+def get_history_keyboard(user_id, mode="view"):
+    sessions = db.get_user_sessions(user_id, limit=10)
+    if not sessions:
+        return None
+    
+    keyboard = []
+    for s in sessions:
+        # Обрезаем длинные заголовки для красоты
+        title = s['title'][:20] + "..." if len(s['title']) > 20 else s['title']
+        date_short = s['created_at'][5:16]
+        
+        if mode == "view":
+            btn_text = f"📂 {title} ({date_short})"
+            callback = f"session_{s['id']}"
+        else:
+            btn_text = f"❌ Удалить: {title}"
+            callback = f"del_{s['id']}"
+            
+        keyboard.append([InlineKeyboardButton(text=btn_text, callback_data=callback)])
+    
+    if mode == "view":
+        keyboard.append([InlineKeyboardButton("🗑 УПРАВЛЕНИЕ АРХИВОМ", callback_data="history_manage")])
+    else:
+        keyboard.append([InlineKeyboardButton("🔙 НАЗАД", callback_data="history_back")])
+        
+    return InlineKeyboardMarkup(keyboard)
