@@ -8,11 +8,11 @@ load_dotenv()
 # =========================================================
 BOT_TOKEN_ORACLE = os.getenv("BOT_TOKEN_ORACLE")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID") 
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
-# 🏛 АРХИВ (The Vault)
+# 🏛 АРХИВ
 archive_id_str = os.getenv("ARCHIVE_CHANNEL_ID")
 ARCHIVE_CHANNEL_ID = int(archive_id_str) if archive_id_str else 0
 
@@ -21,11 +21,19 @@ PAYMENT_INFO = "USDT (TRC20): T..........................."
 ADMIN_CONTACT = "@vinixspb"
 
 # =========================================================
-# ⚙️ МОЗГ И ЛИМИТЫ
+# ⚙️ МОЗГ И МОДЕЛИ
 # =========================================================
+# Основные (Платные/Лимитированные)
 MODEL_BASIC = "openai/gpt-4o-mini"
 MODEL_PRO = "openai/gpt-4o"
 MODEL_NEO = "anthropic/claude-3.5-sonnet"
+
+# --- ВОТ ЧЕГО НЕ ХВАТАЛО В ТВОЕМ ФАЙЛЕ ---
+# Новые (Бесплатные / Free Tier)
+MODEL_DEVSTRAL = "mistralai/devstral-2512:free"        # Код + Агент
+MODEL_CHIMERA = "tngtech/deepseek-r1t2-chimera:free"   # Логика (DeepSeek V3 + R1)
+MODEL_LIQUID = "liquid/lfm-2.5-1.2b-instruct:free"     # Быстрый чат
+# ----------------------------------------
 
 DEFAULT_MODEL = MODEL_BASIC
 
@@ -35,7 +43,6 @@ LIMITS = {
     "NEO": 60
 }
 
-# --- ОПИСАНИЯ ТАРИФОВ ---
 TARIFF_INFO = {
     "START": (
         "💠 <b>TARIFF: START</b>\n"
@@ -68,8 +75,8 @@ SYSTEM_PROMPT = (
     "Отвечай кратко, точно и в стиле киберпанк/профессионал. "
     "Ты вежлив, но не эмоционален. Ты — Система.\n\n"
     "ВАЖНО: Ты обладаешь модулем распознавания речи. "
-    "Если пользователь присылает голосовое сообщение (оно приходит тебе как текст), "
-    "обрабатывай его как обычный запрос, не упоминая, что ты не умеешь слушать."
+    "Если запрос начинается с метки [Audio Input], знай, что это транскрипция голоса пользователя. "
+    "Отвечай на суть вопроса, игнорируя факт того, что это было аудио."
 )
 
 AI_TEMPERATURE = 0.7
