@@ -10,17 +10,20 @@ class AudioStudio:
         self.api_key = config.ELEVENLABS_API_KEY
         self.base_url = "https://api.elevenlabs.io/v1"
         
+        # Обновленные заголовки: притворяемся, что мы на сайте
         self.headers = {
             "xi-api-key": self.api_key,
             "Content-Type": "application/json",
-            "Accept": "audio/mpeg"
+            "Accept": "audio/mpeg",
+            "Origin": "https://elevenlabs.io",
+            "Referer": "https://elevenlabs.io/"
         }
         
         if not self.api_key:
             logger.warning("⚠️ ElevenLabs API Key не найден. Аудио-студия недоступна.")
     
     async def text_to_speech(self, text, voice_id):
-        """Превращает текст в голосовое сообщение (MP3) с валидацией данных"""
+        """Превращает текст в голосовое сообщение (MP3) с усиленной маскировкой"""
         if not self.api_key: return None
         
         url = f"{self.base_url}/text-to-speech/{voice_id}?output_format=mp3_44100_128"
@@ -35,32 +38,33 @@ class AudioStudio:
         }
         
         try:
-            # СМЕНИЛИ МАСКИРОВКУ НА SAFARI (часто помогает от Cloudflare)
-            async with AsyncSession(impersonate="safari15_5") as session:
+            # ИСПОЛЬЗУЕМ CHROME 124 (Самый свежий и надежный отпечаток)
+            async with AsyncSession(impersonate="chrome124") as session:
                 resp = await session.post(url, json=payload, headers=self.headers)
                 
                 if resp.status_code == 200:
-                    # --- ПРОВЕРКА: ЭТО ТОЧНО АУДИО? ---
-                    content_type = resp.headers.get("content-type", "").lower()
                     content_bytes = resp.content
                     
-                    # 1. Если это JSON (значит внутри ошибка API ElevenLabs, например лимиты)
+                    # --- ПРОВЕРКИ ---
+                    # 1. JSON-ошибка от API
                     if content_bytes.strip().startswith(b"{"):
-                        error_json = resp.json()
-                        logger.error(f"TTS Logic Error: {error_json}")
+                        try:
+                            error_json = resp.json()
+                            logger.error(f"TTS Logic Error: {error_json}")
+                        except:
+                            logger.error(f"TTS Logic Error: {content_bytes[:100]}")
                         return None
                         
-                    # 2. Если это HTML (значит это капча Cloudflare)
+                    # 2. HTML-капча от Cloudflare
                     if content_bytes.strip().startswith(b"<"):
-                        logger.error("TTS Error: Cloudflare sent HTML CAPTCHA instead of Audio. Try again later.")
+                        logger.error("TTS Error: Cloudflare sent HTML CAPTCHA. IP Reputation issue.")
                         return None
                     
-                    # 3. Если размер слишком маленький (меньше 100 байт - это не mp3)
+                    # 3. Размер
                     if len(content_bytes) < 100:
                         logger.error(f"TTS Error: File too small ({len(content_bytes)} bytes)")
                         return None
 
-                    # Если все проверки пройдены
                     logger.info(f"✅ TTS Success: Valid Audio received ({len(content_bytes)} bytes)")
                     return content_bytes
                 
@@ -84,11 +88,10 @@ class AudioStudio:
         }
         
         try:
-            async with AsyncSession(impersonate="safari15_5") as session:
+            async with AsyncSession(impersonate="chrome124") as session:
                 resp = await session.post(url, json=payload, headers=self.headers)
                 
                 if resp.status_code == 200:
-                    # Валидация для SFX
                     if resp.content.startswith(b"{") or resp.content.startswith(b"<"):
                          logger.error("SFX Error: Not an audio file")
                          return None
