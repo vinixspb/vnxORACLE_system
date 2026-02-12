@@ -11,6 +11,8 @@ from telegram.ext import ContextTypes
 import config
 from loader import sheets_mgr, ai_engine, db, USER_MODELS, audio_studio
 import keyboards
+# Если вы уже перешли на новую структуру папок, то импорт keyboards верный.
+# Если нет, убедитесь, что файлы лежат правильно.
 
 logger = logging.getLogger(__name__)
 DOWNLOADS_DIR = "downloads"
@@ -24,7 +26,7 @@ async def send_paywall(update: Update):
     await update.message.reply_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
 
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str):
-    """Генерация изображений через Pollinations (Free)"""
+    """Генерация изображений через Pollinations (Free) - вызывается командой /img"""
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
     enhanced_prompt = f"{prompt}, highly detailed, 8k, cinematic lighting"
@@ -192,6 +194,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_sfx_request(update, context, text)
         context.user_data['mode'] = None
         return
+    if mode == 'img_wait': # Режим ожидания промпта для картинки
+        # Здесь мы должны вызвать генерацию картинки
+        # Пока используем старую функцию generate_image (Pollinations), 
+        # но в будущем здесь будет вызов services.image_engine
+        await generate_image(update, context, text)
+        context.user_data['mode'] = None
+        return
 
     if text.startswith("/img "):
         await generate_image(update, context, text[5:])
@@ -200,7 +209,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await process_ai_request(update, context, text)
 
 
-# --- CALLBACKS ---
+# --- CALLBACKS (ВОТ ЗДЕСЬ БЫЛА ОШИБКА) ---
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -209,7 +218,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 1. Профиль и Тарифы
     if data == "profile_tariffs":
-        # Используем TARIFF_INFO из конфига для красоты
         tariffs_text = "\n\n".join(config.TARIFF_INFO.values())
         await query.edit_message_text(f"{tariffs_text}\n\n👇 <b>Выберите тариф для подключения:</b>", reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
     
@@ -217,9 +225,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(config.MSG_SUPPORT, parse_mode='HTML', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_profile")]]))
 
     elif data == "back_to_profile":
-        # Возврат в профиль
         user_tariff = sheets_mgr.get_user_tariff(user_id)
-        if not user_tariff: # Если вдруг доступа нет
+        if not user_tariff:
             await query.edit_message_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
             return
 
@@ -236,25 +243,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(profile_text, reply_markup=keyboards.get_profile_keyboard(), parse_mode='HTML')
 
     # 2. Покупка
-   elif data.startswith("setmodel_"):
-        # 1. Меняем модель в памяти
-        new_model = data.split("setmodel_")[1]
-        USER_MODELS[user_id] = new_model
-        context.user_data['mode'] = None # Сброс режима
-
-        # 2. УДАЛЯЕМ МЕНЮ (чтобы не засорять чат)
-        try:
-            await query.message.delete()
-        except:
-            pass # Если сообщение старое, просто промолчим
-
-        # 3. Отправляем чистое сообщение-подтверждение
-        model_name = next((name for name, code in config.MODELS_LIST if code == new_model), new_model)
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=f"🧠 <b>Модель активирована:</b> {model_name}\nМожете писать запрос.",
-            parse_mode='HTML'
-        )
+    elif data.startswith("buy_"):
+        plan = data.split("_")[1]
+        await query.edit_message_text(f"💳 <b>Оплата тарифа {plan}</b>\n\n{config.PAYMENT_INFO}", parse_mode='HTML')
 
     # 3. Навигация Архива
     elif data == "history_manage":
@@ -271,19 +262,60 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.activate_session(user_id, int(data.split("_")[1]))
         await query.message.reply_text("📂 <b>Диалог восстановлен.</b>", parse_mode='HTML')
 
-    # 4. Меню и Модели
+    # 4. Меню и Модели (ТЕКСТ)
     elif data == "feature_text":
         context.user_data['mode'] = None
         curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
         await query.edit_message_text("💡 <b>ВЫБОР МОДЕЛИ:</b>", reply_markup=keyboards.get_models_keyboard(curr), parse_mode='HTML')
     
     elif data.startswith("setmodel_"):
+        # Логика: Меняем модель -> Удаляем меню -> Пишем подтверждение
+        new_model = data.split("setmodel_")[1]
+        USER_MODELS[user_id] = new_model
         context.user_data['mode'] = None
-        USER_MODELS[user_id] = data.split("setmodel_")[1]
-        await query.answer(f"🧠 Модель активна")
-        await query.edit_message_text(f"✅ <b>Модель изменена.</b>", parse_mode='HTML')
+        
+        # Удаляем меню
+        try: await query.message.delete()
+        except: pass
+        
+        # Ищем красивое имя модели
+        model_name = next((name for name, code in config.MODELS_LIST if code == new_model), new_model)
+        await context.bot.send_message(
+            chat_id=user_id, 
+            text=f"🧠 <b>Модель активирована:</b> {model_name}\nМожете писать запрос.", 
+            parse_mode='HTML'
+        )
 
-    # 5. Аудио
+    # 5. Студия Дизайна (ИЗОБРАЖЕНИЯ)
+    elif data == "feature_design":
+        context.user_data['mode'] = None
+        # Для использования get_image_models_keyboard убедитесь, что она импортирована
+        # Если вы еще не создали keyboards/ai_image.py, удалите эту ветку или замените на заглушку
+        try:
+            curr_img = context.user_data.get('img_model', config.DEFAULT_IMG_MODEL)
+            await query.edit_message_text(
+                "🎨 <b>СТУДИЯ ДИЗАЙНА</b>\n\nВыберите нейросеть для генерации:", 
+                reply_markup=keyboards.get_image_models_keyboard(user_id, curr_img), 
+                parse_mode='HTML'
+            )
+        except AttributeError:
+            await query.answer("🔧 Модуль в разработке")
+
+    elif data.startswith("setimg_"):
+        new_model = data.split("setimg_")[1]
+        context.user_data['img_model'] = new_model
+        context.user_data['mode'] = 'img_wait' # Включаем режим ожидания промпта
+        
+        try: await query.message.delete()
+        except: pass
+        
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"🎨 <b>Модель выбрана!</b>\nРежим: <code>{new_model}</code>\n\nОпишите, что вы хотите увидеть:",
+            parse_mode='HTML'
+        )
+
+    # 6. Аудио
     elif data == "feature_audio":
         await query.edit_message_text("🎤 <b>АУДИО СЕРВИСЫ:</b>", reply_markup=keyboards.get_audio_keyboard(), parse_mode='HTML')
     elif data == "audio_tts":
@@ -304,7 +336,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.create_session(user_id, title="Новый диалог")
         await query.message.reply_text("💬 <b>Текстовый режим.</b>", parse_mode='HTML')
 
-    # 6. Общие возвраты
+    # 7. Общие возвраты
     elif data == "back_to_features":
         await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
     
