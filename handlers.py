@@ -1,13 +1,12 @@
 import os
 import logging
-import random
-import aiohttp
 import uuid
 import time
+import random
+import aiohttp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import BadRequest
-from telegram.ext import ContextTypes
 from telegram.constants import ChatAction
+from telegram.ext import ContextTypes
 
 import config
 from loader import sheets_mgr, ai_engine, db, USER_MODELS, audio_studio
@@ -18,12 +17,14 @@ DOWNLOADS_DIR = "downloads"
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
 
-# --- Вспомогательные функции ---
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
 async def send_paywall(update: Update):
+    """Отправка сообщения об ограничении доступа"""
     await update.message.reply_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
 
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str):
+    """Генерация изображений через Pollinations (Free)"""
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
     enhanced_prompt = f"{prompt}, highly detailed, 8k, cinematic lighting"
@@ -55,6 +56,7 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
     session_id = db.get_active_session(user_id)
     
+    # Авто-заголовок
     history = db.get_history(session_id, limit=1)
     if not history:
         clean_title = input_text.replace("[Audio Input]: ", "")[:30]
@@ -81,66 +83,10 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
             try: os.remove(image_path)
             except: pass
 
-# --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    text = update.message.text.strip()
-    
-    # 🛡 1. ПРИОРИТЕТ СИСТЕМНЫХ КНОПОК (Сброс режимов)
-    sys_buttons = [
-        config.BTN_NEW_DIALOG, config.BTN_HISTORY, 
-        config.BTN_PROFILE, config.BTN_TARIFFS, 
-        config.BTN_CHANGE_MODEL, config.BTN_HELP
-    ]
-    
-    if text in sys_buttons:
-        context.user_data['mode'] = None # Сброс режима при нажатии кнопки
-        
-        if text == config.BTN_TARIFFS:
-            msg = "💳 <b>ТАРИФНЫЕ ПЛАНЫ</b>\n\n💠 <b>START:</b> 190₽\n⚡️ <b>PRO:</b> 590₽\n🧬 <b>NEO:</b> 990₽"
-            await update.message.reply_text(msg, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
-            return
-
-        if text == config.BTN_NEW_DIALOG:
-            db.create_session(user_id, title="Новый диалог")
-            await update.message.reply_text("♻️ <b>Контекст очищен. Начата новая сессия.</b>", parse_mode='HTML')
-            return
-
-        if text == config.BTN_HISTORY:
-            markup = keyboards.get_history_keyboard(user_id)
-            if not markup: await update.message.reply_text("📂 Архив пуст.")
-            else: await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
-            return
-
-        if text == config.BTN_CHANGE_MODEL:
-            await update.message.reply_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
-            return
-            
-        return # Остальные кнопки (Profile, Help) обрабатываются здесь, не идя в AI
-
-    # 🛡 2. ОБРАБОТКА РЕЖИМОВ
-    mode = context.user_data.get('mode')
-    
-    if mode == 'tts_wait':
-        await handle_tts_request(update, context, text)
-        return
-        
-    if mode == 'sfx_wait':
-        await handle_sfx_request(update, context, text)
-        context.user_data['mode'] = None
-        return
-
-    if text.startswith("/img "):
-        await generate_image(update, context, text[5:])
-        return
-
-    # Обычный запрос
-    await process_ai_request(update, context, text)
-
-# --- МУЛЬТИМЕДИА ---
+# --- МУЛЬТИМЕДИА ХЕНДЛЕРЫ ---
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Vision Module"""
     user_id = update.effective_user.id
     if sheets_mgr.get_user_tariff(user_id) not in ['PRO', 'NEO']:
         return await update.message.reply_text("🧬 <b>VISION MODULE</b>\nДоступен на уровнях PRO и NEO.", parse_mode='HTML')
@@ -150,7 +96,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         file = await context.bot.get_file(photo.file_id)
-        # Уникальное имя + UUID
         path = os.path.join(DOWNLOADS_DIR, f"v_{user_id}_{uuid.uuid4().hex[:8]}.jpg")
         await file.download_to_drive(path)
         await process_ai_request(update, context, caption, image_path=path)
@@ -159,19 +104,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Ошибка загрузки изображения.")
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка голосовых сообщений (Whisper) с гарантированной очисткой"""
+    """Whisper STT"""
     user_id = update.effective_user.id
     if not sheets_mgr.get_user_tariff(user_id): return await send_paywall(update)
     
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
-    
-    # Генерируем путь с UUID во избежание коллизий
     file_path = os.path.join(DOWNLOADS_DIR, f"v_{user_id}_{uuid.uuid4().hex[:8]}.ogg")
     
     try:
         voice_file = await context.bot.get_file(update.message.voice.file_id)
         await voice_file.download_to_drive(file_path)
-        
         transcript = await ai_engine.transcribe_audio(file_path)
         
         if transcript:
@@ -179,35 +121,127 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ai_input = f"[Audio Input]: {transcript}"
             await process_ai_request(update, context, ai_input)
         else:
-            # FIX 1: Сообщаем пользователю о неудаче
-            await update.message.reply_text("🎤 <b>Не удалось распознать голос.</b>\nПопробуйте ещё раз или отправьте текстом.", parse_mode='HTML')
+            await update.message.reply_text("🎤 <b>Не удалось распознать голос.</b>", parse_mode='HTML')
             
     except Exception as e:
         logger.error(f"Voice Error: {e}")
         await update.message.reply_text("⚠️ Ошибка обработки голоса.")
     finally:
-        # FIX 2: Гарантированное удаление файла
         if os.path.exists(file_path):
             try: os.remove(file_path)
             except: pass
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Хранитель (Архив)"""
+    """Archive Vault"""
     if config.ARCHIVE_CHANNEL_ID:
         try:
             await context.bot.forward_message(chat_id=config.ARCHIVE_CHANNEL_ID, from_chat_id=update.effective_chat.id, message_id=update.message.message_id)
             await update.message.reply_text("✅ <b>Объект сохранен.</b>", parse_mode='HTML')
         except: pass
 
-# --- CALLBACKS & ВНУТРЕННИЕ ФУНКЦИИ ---
+# --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+    
+    # Системные кнопки (Новое меню 4 кнопки)
+    sys_buttons = [config.BTN_NEW_DIALOG, config.BTN_HISTORY, config.BTN_PROFILE, config.BTN_CHANGE_MODEL]
+    
+    if text in sys_buttons:
+        context.user_data['mode'] = None # Сброс режима
+        
+        if text == config.BTN_NEW_DIALOG:
+            db.create_session(user_id, title="Новый диалог")
+            await update.message.reply_text("♻️ <b>Контекст очищен. Начата новая сессия.</b>", parse_mode='HTML')
+            
+        elif text == config.BTN_HISTORY:
+            markup = keyboards.get_history_keyboard(user_id)
+            if not markup: await update.message.reply_text("📂 Архив пуст.")
+            else: await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
+            
+        elif text == config.BTN_CHANGE_MODEL:
+            await update.message.reply_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
+            
+        elif text == config.BTN_PROFILE:
+            # Логика профиля
+            user_tariff = sheets_mgr.get_user_tariff(user_id)
+            if not user_tariff: return await send_paywall(update)
+            
+            status = f"✅ {user_tariff}"
+            total_tokens = db.get_total_tokens(user_id)
+            current_model = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
+            
+            profile_text = (
+                f"👤 <b>МОЙ ПРОФИЛЬ</b>\n"
+                f"ID: <code>{user_id}</code>\n"
+                f"Статус: <b>{status}</b>\n"
+                f"Расход токенов: <b>{total_tokens}</b>\n"
+                f"Активная модель: <code>{current_model}</code>"
+            )
+            await update.message.reply_text(profile_text, reply_markup=keyboards.get_profile_keyboard(), parse_mode='HTML')
+
+        return
+
+    # Обработка режимов
+    mode = context.user_data.get('mode')
+    if mode == 'tts_wait':
+        await handle_tts_request(update, context, text)
+        return
+    if mode == 'sfx_wait':
+        await handle_sfx_request(update, context, text)
+        context.user_data['mode'] = None
+        return
+
+    if text.startswith("/img "):
+        await generate_image(update, context, text[5:])
+        return
+
+    await process_ai_request(update, context, text)
+
+
+# --- CALLBACKS ---
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
 
-    # Навигация Архива
-    if data == "history_manage":
+    # 1. Профиль и Тарифы
+    if data == "profile_tariffs":
+        # Используем TARIFF_INFO из конфига для красоты
+        tariffs_text = "\n\n".join(config.TARIFF_INFO.values())
+        await query.edit_message_text(f"{tariffs_text}\n\n👇 <b>Выберите тариф для подключения:</b>", reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
+    
+    elif data == "profile_support":
+        await query.edit_message_text(config.MSG_SUPPORT, parse_mode='HTML', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_profile")]]))
+
+    elif data == "back_to_profile":
+        # Возврат в профиль
+        user_tariff = sheets_mgr.get_user_tariff(user_id)
+        if not user_tariff: # Если вдруг доступа нет
+            await query.edit_message_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
+            return
+
+        status = f"✅ {user_tariff}"
+        total_tokens = db.get_total_tokens(user_id)
+        current_model = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
+        profile_text = (
+            f"👤 <b>МОЙ ПРОФИЛЬ</b>\n"
+            f"ID: <code>{user_id}</code>\n"
+            f"Статус: <b>{status}</b>\n"
+            f"Расход токенов: <b>{total_tokens}</b>\n"
+            f"Активная модель: <code>{current_model}</code>"
+        )
+        await query.edit_message_text(profile_text, reply_markup=keyboards.get_profile_keyboard(), parse_mode='HTML')
+
+    # 2. Покупка
+    elif data.startswith("buy_"):
+        plan = data.split("_")[1]
+        await query.edit_message_text(f"💳 <b>Оплата тарифа {plan}</b>\n\n{config.PAYMENT_INFO}", parse_mode='HTML')
+
+    # 3. Навигация Архива
+    elif data == "history_manage":
         await query.edit_message_reply_markup(reply_markup=keyboards.get_history_keyboard(user_id, mode="delete"))
     elif data == "history_back":
         await query.edit_message_reply_markup(reply_markup=keyboards.get_history_keyboard(user_id, mode="view"))
@@ -217,12 +251,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         markup = keyboards.get_history_keyboard(user_id, mode="delete")
         if markup: await query.edit_message_reply_markup(reply_markup=markup)
         else: await query.edit_message_text("📂 Архив пуст.", reply_markup=keyboards.get_features_keyboard())
-    
     elif data.startswith("session_"):
         db.activate_session(user_id, int(data.split("_")[1]))
         await query.message.reply_text("📂 <b>Диалог восстановлен.</b>", parse_mode='HTML')
-    
-    # Навигация Меню и Моделей
+
+    # 4. Меню и Модели
     elif data == "feature_text":
         context.user_data['mode'] = None
         curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
@@ -234,37 +267,36 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(f"🧠 Модель активна")
         await query.edit_message_text(f"✅ <b>Модель изменена.</b>", parse_mode='HTML')
 
-    # Аудио и Голос
+    # 5. Аудио
     elif data == "feature_audio":
         await query.edit_message_text("🎤 <b>АУДИО СЕРВИСЫ:</b>", reply_markup=keyboards.get_audio_keyboard(), parse_mode='HTML')
-    
+    elif data == "audio_tts":
+        await query.edit_message_text("🗣 <b>ВЫБЕРИТЕ ГОЛОС:</b>", reply_markup=keyboards.get_voice_selection_keyboard(), parse_mode='HTML')
     elif data.startswith("setvoice_"):
         context.user_data['voice_id'] = data.split("setvoice_")[1]
         context.user_data['mode'] = 'tts_wait'
         await query.answer("🎙 Голос выбран")
         await query.message.reply_text("🗣 <b>Режим диктора активен.</b>\nПришлите текст для озвучки:", parse_mode='HTML')
-    
     elif data == "audio_tts_again":
         context.user_data['mode'] = 'tts_wait'
         await query.message.reply_text("🎤 Жду текст:", parse_mode='HTML')
-
+    elif data == "audio_sfx":
+        context.user_data['mode'] = 'sfx_wait'
+        await query.message.reply_text("🔊 <b>Опишите звук (на англ):</b>", parse_mode='HTML')
     elif data == "mode_chat_reset":
         context.user_data['mode'] = None
         db.create_session(user_id, title="Новый диалог")
         await query.message.reply_text("💬 <b>Текстовый режим.</b>", parse_mode='HTML')
 
-    elif data == "audio_sfx":
-        context.user_data['mode'] = 'sfx_wait'
-        await query.message.reply_text("🔊 <b>Опишите звук (на англ):</b>", parse_mode='HTML')
-    
-    elif data.startswith("buy_"):
-        plan = data.split("_")[1]
-        await query.edit_message_text(f"💳 <b>Оплата {plan}</b>\n\n{config.PAYMENT_INFO}", parse_mode='HTML')
-
+    # 6. Общие возвраты
     elif data == "back_to_features":
-        await query.edit_message_text("🧩 <b>ВОЗМОЖНОСТИ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
+        await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
     
-    await query.answer()
+    try: await query.answer()
+    except: pass
+
+
+# --- ВНУТРЕННИЕ ФУНКЦИИ ---
 
 async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     user_id = update.effective_user.id
@@ -272,23 +304,17 @@ async def handle_tts_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VOICE)
     
     audio_data, engine, is_fallback = await audio_studio.text_to_speech(text, voice)
-    
-    # Сбрасываем режим, чтобы не застревать
     context.user_data['mode'] = None 
     
     if audio_data:
         warn = "⚠️ <i>Резервный ИИ</i>\n" if is_fallback else ""
         caption = f"🎙 <b>Готово!</b>\n\n{warn}<blockquote>⚙️ {engine} | 🎫 {len(text)}</blockquote>"
-        
         keyboard = [[
             InlineKeyboardButton("🎤 Озвучить еще", callback_data="audio_tts_again"),
             InlineKeyboardButton("💬 Вернуться в чат", callback_data="mode_chat_reset")
         ]]
-        
         await update.message.reply_audio(
-            audio=audio_data, 
-            caption=caption, 
-            parse_mode='HTML', 
+            audio=audio_data, caption=caption, parse_mode='HTML', 
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         db.update_tokens(user_id, len(text))
@@ -307,11 +333,28 @@ async def handle_sfx_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
 # --- КОМАНДА START ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    user_id = update.effective_user.id
+    user = update.effective_user
+    user_id = user.id
+    
+    # Сначала проверяем доступ (Paywall)
     tariff = sheets_mgr.get_user_tariff(user_id)
     if not tariff:
-        await update.message.reply_text(config.MSG_WELCOME, parse_mode='HTML')
         await update.message.reply_text(config.MSG_NO_SUB, reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
         return
+    
+    # Если доступ есть — создаем сессию и показываем интерфейс
     db.create_session(user_id, title="Новый чат")
-    await update.message.reply_text(f"👁 <b>vnxORACLE: ONLINE</b>\nВаш уровень: <b>{tariff}</b>", reply_markup=keyboards.get_main_keyboard(), parse_mode='HTML')
+    
+    first_name = user.first_name or "Пользователь"
+    welcome_text = (
+        f"👋 <b>Здравствуйте, {first_name}!</b>\n\n"
+        "Я — <b>vnxORACLE</b>, ваш персональный нейро-ассистент.\n"
+        "Готов решать задачи любой сложности: от анализа фото до генерации кода.\n\n"
+        "👇 <b>С чего начнем?</b>"
+    )
+    
+    # Показываем нижнее меню (4 кнопки)
+    await update.message.reply_text("🖥 <b>Терминал запущен.</b>", reply_markup=keyboards.get_main_keyboard(), parse_mode='HTML')
+    
+    # Показываем главное меню возможностей (Inline)
+    await update.message.reply_text(welcome_text, reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
