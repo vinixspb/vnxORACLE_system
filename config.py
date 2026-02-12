@@ -14,6 +14,7 @@ ADMIN_CONTACT = "@vinixspb"
 # Поддержка старого и нового именования переменной в .env
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID") or os.getenv("GOOGLE_SHEET_ID")
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+GOOGLE_SHEET_ID = SPREADSHEET_ID
 
 # --- ARCHIVE (FIXED TYPE) ---
 # Критическое исправление: конвертация в int, иначе телеграм не примет ID
