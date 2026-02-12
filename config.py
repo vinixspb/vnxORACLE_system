@@ -128,8 +128,9 @@ TARIFF_INFO = {
 # Главное меню (4 кнопки)
 BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"
 BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
-BTN_PROFILE = "👤 МОЙ ПРОФИЛЬ"
-BTN_CHANGE_MODEL = "🧠 ВЫБОР МОДЕЛИ"
+BTN_CHANGE_MODEL = "🧠 Выбор Ai модели"
+BTN_PROFILE = "👤 Мой профиль"
+
 
 # Системные кнопки (используются в коде для проверок)
 BTN_TARIFFS = "💳 Тарифные планы"
