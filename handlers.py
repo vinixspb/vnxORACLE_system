@@ -236,9 +236,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(profile_text, reply_markup=keyboards.get_profile_keyboard(), parse_mode='HTML')
 
     # 2. Покупка
-    elif data.startswith("buy_"):
-        plan = data.split("_")[1]
-        await query.edit_message_text(f"💳 <b>Оплата тарифа {plan}</b>\n\n{config.PAYMENT_INFO}", parse_mode='HTML')
+   elif data.startswith("setmodel_"):
+        # 1. Меняем модель в памяти
+        new_model = data.split("setmodel_")[1]
+        USER_MODELS[user_id] = new_model
+        context.user_data['mode'] = None # Сброс режима
+
+        # 2. УДАЛЯЕМ МЕНЮ (чтобы не засорять чат)
+        try:
+            await query.message.delete()
+        except:
+            pass # Если сообщение старое, просто промолчим
+
+        # 3. Отправляем чистое сообщение-подтверждение
+        model_name = next((name for name, code in config.MODELS_LIST if code == new_model), new_model)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"🧠 <b>Модель активирована:</b> {model_name}\nМожете писать запрос.",
+            parse_mode='HTML'
+        )
 
     # 3. Навигация Архива
     elif data == "history_manage":
