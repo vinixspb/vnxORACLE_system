@@ -10,18 +10,18 @@ BOT_TOKEN_ORACLE = os.getenv("BOT_TOKEN_ORACLE")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 ADMIN_CONTACT = "@vinixspb"
 
-# --- GOOGLE SHEETS ---
-# Поддержка старого и нового именования переменной в .env
+# --- GOOGLE SHEETS (FIXED) ---
+# Поддержка старого и нового именования переменной в .env для совместимости
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID") or os.getenv("GOOGLE_SHEET_ID")
+GOOGLE_SHEET_ID = SPREADSHEET_ID # Алиас для services/sheets_manager.py
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
-GOOGLE_SHEET_ID = SPREADSHEET_ID
 
-# --- ARCHIVE (FIXED TYPE) ---
-# Критическое исправление: конвертация в int, иначе телеграм не примет ID
+# --- ARCHIVE ---
+# Конвертация в число для Telegram API
 archive_id_str = os.getenv("ARCHIVE_CHANNEL_ID")
 ARCHIVE_CHANNEL_ID = int(archive_id_str) if archive_id_str else 0
 
-# --- PAYMENT INFO (CYBERPUNK STYLE) ---
+# --- PAYMENT INFO ---
 PAYMENT_INFO = (
     "💳 <b>USDT (TRC20):</b>\n<code>T...........................</code>\n\n"
     "💳 <b>Карта (РФ):</b>\n<code>0000 0000 0000 0000</code>\n\n"
@@ -29,41 +29,54 @@ PAYMENT_INFO = (
 )
 
 # =========================================================
-# 🧠 AI ENGINE (MULTI-PROVIDER SETUP)
+# 🧠 AI ENGINE (HYBRID CORE)
 # =========================================================
 
-# 1. РЕЗЕРВ (OPENROUTER) - Оставляем для совместимости
+# 1. Получаем ключи из .env
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+KIE_API_KEY = os.getenv("KIE_API_KEY") # Твой новый ключ
 
-# 2. АКТИВНЫЙ ПРОВАЙДЕР (KIA.AI)
-KIA_API_KEY = os.getenv("KIA_API_KEY") # Добавь этот ключ в .env!
+# 2. Логика автоматического выбора провайдера
+# Приоритет: KIE (Новый) -> OpenRouter (Старый/Резерв)
 
-# ЛОГИКА ВЫБОРА ПРОВАЙДЕРА
-# Сейчас активен KIA. Чтобы вернуть OpenRouter, закомментируй блок KIA и раскомментируй OpenRouter.
-AI_PROVIDER = "KIA" 
+if KIE_API_KEY:
+    # --- НАСТРОЙКИ НОВОГО ПРОВАЙДЕРА ---
+    AI_PROVIDER = "KIE"
+    AI_API_KEY = KIE_API_KEY
+    # ⚠️ ВАЖНО: Убедись, что адрес API верный. Обычно это v1.
+    AI_BASE_URL = "https://api.kie.ai/v1" 
+    print(f"🚀 Config: Active Provider -> KIE.AI ({AI_BASE_URL})")
 
-if AI_PROVIDER == "KIA":
-    AI_API_KEY = KIA_API_KEY
-    AI_BASE_URL = "https://api.kia.ai/v1" 
-else:
+elif OPENROUTER_API_KEY:
+    # --- НАСТРОЙКИ РЕЗЕРВА ---
+    AI_PROVIDER = "OpenRouter"
     AI_API_KEY = OPENROUTER_API_KEY
     AI_BASE_URL = "https://openrouter.ai/api/v1"
+    print("🔄 Config: Active Provider -> OpenRouter (Fallback)")
 
-# --- МОДЕЛИ (ID моделей для KIA.AI / OPENAI COMPATIBLE) ---
-# Убедись, что эти имена поддерживаются в KIA. Если нет - замени на их аналоги.
+else:
+    # --- АВАРИЙНЫЙ РЕЖИМ ---
+    AI_PROVIDER = "NONE"
+    AI_API_KEY = None
+    AI_BASE_URL = None
+    print("❌ Config: CRITICAL - No AI Keys found!")
+
+# --- МОДЕЛИ (NEURAL MAP) ---
+# Если KIE.AI использует стандартные имена OpenAI (gpt-4o), оставляем как есть.
+# Если у них свои названия (например 'kie-gpt-4'), измени значения справа.
 MODEL_BASIC = "gpt-4o-mini"
 MODEL_PRO = "gpt-4o"
 MODEL_NEO = "claude-3-5-sonnet-20240620"
-MODEL_DEVSTRAL = "mistral-large-latest"      # Проверь доступность в KIA
-MODEL_CHIMERA = "llama-3.1-70b-instruct"     # Проверь доступность в KIA
-MODEL_LIQUID = "liquid-lfm-2.5"              # Проверь доступность в KIA
+MODEL_DEVSTRAL = "mistral-large-latest"
+MODEL_CHIMERA = "llama-3.1-70b-instruct"
+MODEL_LIQUID = "liquid-lfm-2.5"
 
 DEFAULT_MODEL = MODEL_BASIC
 
 # --- ПАРАМЕТРЫ ГЕНЕРАЦИИ ---
 AI_TEMPERATURE = 0.7
 
-# --- SYSTEM PROMPTS (RESTORED ATMOSPHERE) ---
+# --- SYSTEM PROMPT ---
 SYSTEM_PROMPT = (
     "Ты — vnxORACLE, цифровой разум системы vnxMATRIX. "
     "Твоя цель — помогать пользователям, отвечать на вопросы и писать код. "
@@ -78,14 +91,12 @@ SYSTEM_PROMPT = (
 # 🎙 ГОЛОСОВЫЕ ТЕХНОЛОГИИ
 # =========================================================
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") # Для Whisper STT и Fallback TTS
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") # Для Whisper STT
 
-# ID голосов (Возвращены оригинальные значения из твоего старого файла)
-VOICE_ADAM = "pNInz6obpgDQGcFmaJgB"    # Глубокий мужской (Deep)
-VOICE_RACHEL = "21m00Tcm4TlvDq8ikWAM"  # Женский (American, Calm)
-VOICE_FIN = "D38z5RcWu1voky8WSVqt"     # Энергичный мужской (Irish) - (Исправлен ID на Vqt)
-VOICE_MIMI = "zrHiDhphv9ZnVXBqCLjz"    # Детский / Милый (Australian) - (Исправлен ID на z)
-
+VOICE_ADAM = "pNInz6obpgDQGcFmaJgB"
+VOICE_RACHEL = "21m00Tcm4TlvDq8ikWAM"
+VOICE_FIN = "D38z5RcWu1voky8WSVqt"
+VOICE_MIMI = "zrHiDhphv9ZnVXBqCLjz"
 DEFAULT_VOICE = VOICE_ADAM
 
 # =========================================================
@@ -93,46 +104,24 @@ DEFAULT_VOICE = VOICE_ADAM
 # =========================================================
 LIMITS = {"START": 10, "PRO": 30, "NEO": 60}
 
-# Возвращаем красивое описание тарифов для меню
 TARIFF_INFO = {
-    "START": (
-        "💠 <b>TARIFF: START</b>\n"
-        "<i>(Базовый доступ)</i>\n"
-        "├ Модель: GPT-4o Mini\n"
-        "├ Память: 10 сообщений\n"
-        "├ Vision: ❌\n"
-        "└ Цена: 190₽ / мес"
-    ),
-    "PRO": (
-        "⚡️ <b>TARIFF: PRO</b>\n"
-        "<i>(Профессиональный)</i>\n"
-        "├ Модель: GPT-4o (Flagship)\n"
-        "├ Память: 30 сообщений\n"
-        "├ Vision: ✅ (Анализ фото)\n"
-        "└ Цена: 590₽ / мес"
-    ),
-    "NEO": (
-        "🧬 <b>TARIFF: NEO (EVOLUTION)</b>\n"
-        "<i>(Максимальный)</i>\n"
-        "├ Модель: Claude 3.5 Sonnet\n"
-        "├ Память: 60 сообщений\n"
-        "├ Vision: ✅ (Анализ фото)\n"
-        "├ Video: ✅ (Beta)\n"
-        "└ Цена: 990₽ / мес"
-    )
+    "START": ("💠 <b>TARIFF: START</b>\n<i>(Базовый доступ)</i>\n├ Модель: GPT-4o Mini\n├ Память: 10 сообщений\n└ Цена: 190₽ / мес"),
+    "PRO": ("⚡️ <b>TARIFF: PRO</b>\n<i>(Профессиональный)</i>\n├ Модель: GPT-4o (Flagship)\n├ Память: 30 сообщений\n├ Vision: ✅\n└ Цена: 590₽ / мес"),
+    "NEO": ("🧬 <b>TARIFF: NEO (EVOLUTION)</b>\n<i>(Максимальный)</i>\n├ Модель: Claude 3.5 Sonnet\n├ Память: 60 сообщений\n├ Vision: ✅\n├ Video: ✅ (Beta)\n└ Цена: 990₽ / мес")
 }
 
 # =========================================================
 # 🎹 ИНТЕРФЕЙС (UI)
 # =========================================================
-# Главное меню (4 кнопки)
+# Верхний ряд (Капслок - важные действия)
 BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"
 BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
-BTN_CHANGE_MODEL = "🧠 Выбор Ai модели"
+
+# Нижний ряд (Обычный текст - настройки)
+BTN_CHANGE_MODEL = "🧠 Выбор модели"
 BTN_PROFILE = "👤 Мой профиль"
 
-
-# Системные кнопки (используются в коде для проверок)
+# Системные кнопки (для внутренней логики)
 BTN_TARIFFS = "💳 Тарифные планы"
 BTN_HELP = "🆘 Поддержка"
 
