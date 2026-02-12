@@ -4,8 +4,11 @@ import config
 # --- ГЛАВНОЕ МЕНЮ (REPLY - 4 КНОПКИ) ---
 def get_main_keyboard():
     keyboard = [
-        [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_CHANGE_MODEL)],
-        [KeyboardButton(config.BTN_HISTORY), KeyboardButton(config.BTN_PROFILE)]
+        # Ряд 1: НОВЫЙ ЧАТ и ИСТОРИЯ (Обе кнопки вверху)
+        [KeyboardButton(config.BTN_NEW_DIALOG), KeyboardButton(config.BTN_HISTORY)],
+        
+        # Ряд 2: Выбор модели и Профиль (Внизу)
+        [KeyboardButton(config.BTN_CHANGE_MODEL), KeyboardButton(config.BTN_PROFILE)]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
