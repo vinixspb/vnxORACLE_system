@@ -54,12 +54,13 @@ else:
     print("❌ Config: CRITICAL - No AI Keys found!")
 
 # --- ТЕКСТОВЫЕ МОДЕЛИ (LLM) ---
-MODEL_BASIC = "gpt-4o-mini"
-MODEL_PRO = "gpt-4o"
-MODEL_NEO = "claude-3-5-sonnet-20240620"
-MODEL_DEVSTRAL = "mistral-large-latest"
-MODEL_CHIMERA = "llama-3.1-70b-instruct"
-MODEL_LIQUID = "liquid-lfm-2.5"
+# Используем формат OpenRouter (vendor/model-name)
+MODEL_BASIC = "openai/gpt-4o-mini"
+MODEL_PRO = "openai/gpt-4o-2024-08-06" # Стабильная версия
+MODEL_NEO = "anthropic/claude-3.5-sonnet" # OpenRouter сам выберет актуальную версию (20240620)
+MODEL_DEVSTRAL = "mistralai/mistral-large"
+MODEL_CHIMERA = "meta-llama/llama-3.1-70b-instruct"
+MODEL_LIQUID = "liquid/lfm-40b" # Если Liquid недоступен, OpenRouter вернет ошибку, тогда заменим на Llama
 
 DEFAULT_MODEL = MODEL_BASIC
 
@@ -68,9 +69,9 @@ MODELS_LIST = [
     ("GPT-4o Mini", MODEL_BASIC),
     ("GPT-4o (Pro)", MODEL_PRO),
     ("Claude 3.5 Sonnet", MODEL_NEO),
-    ("Mistral Devstral", MODEL_DEVSTRAL),
-    ("R1T2 Chimera", MODEL_CHIMERA),
-    ("Liquid LFM 2.5", MODEL_LIQUID)
+    ("Mistral Large", MODEL_DEVSTRAL),
+    ("Llama 3.1 70B", MODEL_CHIMERA),
+    ("Liquid LFM", MODEL_LIQUID)
 ]
 
 # --- ПАРАМЕТРЫ ---
