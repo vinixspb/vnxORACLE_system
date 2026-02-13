@@ -29,49 +29,37 @@ PAYMENT_INFO = (
 )
 
 # =========================================================
-# 🧠 AI ENGINE (HYBRID CORE)
+# 🧠 AI ENGINE (TEXT CORE - OPENROUTER)
 # =========================================================
 
-# 1. Получаем ключи
+# Получаем ключи
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-KIE_API_KEY = os.getenv("KIE_API_KEY")
+KIE_API_KEY = os.getenv("KIE_API_KEY") # KIE теперь используется ТОЛЬКО для генерации картинок
 
-# 2. Логика выбора провайдера (Failover Protocol)
-if KIE_API_KEY:
-    AI_PROVIDER = "KIE"
-    AI_API_KEY = KIE_API_KEY
-    AI_BASE_URL = "https://api.kie.ai/v1" 
-    print(f"🚀 Config: Active Provider -> KIE.AI")
-elif OPENROUTER_API_KEY:
-    AI_PROVIDER = "OpenRouter"
-    AI_API_KEY = OPENROUTER_API_KEY
-    AI_BASE_URL = "https://openrouter.ai/api/v1"
-    print("🔄 Config: Active Provider -> OpenRouter (Fallback)")
-else:
-    AI_PROVIDER = "NONE"
-    AI_API_KEY = None
-    AI_BASE_URL = None
-    print("❌ Config: CRITICAL - No AI Keys found!")
+# Текстовое ядро ЖЕСТКО привязано к OpenRouter, так как KIE не поддерживает стандартный чат
+AI_PROVIDER = "OpenRouter"
+AI_API_KEY = OPENROUTER_API_KEY
+AI_BASE_URL = "https://openrouter.ai/api/v1"
 
-# --- ТЕКСТОВЫЕ МОДЕЛИ (LLM) ---
-# Используем формат OpenRouter (vendor/model-name)
-MODEL_BASIC = "openai/gpt-4o-mini"
-MODEL_PRO = "openai/gpt-4o-2024-08-06" # Стабильная версия
-MODEL_NEO = "anthropic/claude-3.5-sonnet" # OpenRouter сам выберет актуальную версию (20240620)
-MODEL_DEVSTRAL = "mistralai/mistral-large"
-MODEL_CHIMERA = "meta-llama/llama-3.1-70b-instruct"
-MODEL_LIQUID = "liquid/lfm-40b" # Если Liquid недоступен, OpenRouter вернет ошибку, тогда заменим на Llama
+# --- ТЕКСТОВЫЕ МОДЕЛИ (LLM) - FREE MODE ---
+# Временно используем бесплатные версии для тестов OpenRouter
+MODEL_BASIC = "google/gemini-2.0-flash:free" # Исправлено (без -exp)
+MODEL_PRO = "microsoft/phi-3-medium-128k-instruct:free"
+MODEL_NEO = "google/gemini-2.0-pro-exp-02-05:free"
+MODEL_DEVSTRAL = "mistralai/mistral-7b-instruct:free"
+MODEL_CHIMERA = "deepseek/deepseek-r1:free"
+MODEL_LIQUID = "liquid/lfm-40b:free"
 
 DEFAULT_MODEL = MODEL_BASIC
 
-# Список для отображения в меню (Название, ID)
+# Список для меню
 MODELS_LIST = [
-    ("GPT-4o Mini", MODEL_BASIC),
-    ("GPT-4o (Pro)", MODEL_PRO),
-    ("Claude 3.5 Sonnet", MODEL_NEO),
-    ("Mistral Large", MODEL_DEVSTRAL),
-    ("Llama 3.1 70B", MODEL_CHIMERA),
-    ("Liquid LFM", MODEL_LIQUID)
+    ("Gemini 2.0 Flash (Free)", MODEL_BASIC),
+    ("Phi-3 Medium (Free)", MODEL_PRO),
+    ("Gemini 2.0 Pro (Free)", MODEL_NEO),
+    ("Mistral 7B (Free)", MODEL_DEVSTRAL),
+    ("DeepSeek R1 (Free)", MODEL_CHIMERA),
+    ("Liquid LFM (Free)", MODEL_LIQUID)
 ]
 
 # --- ПАРАМЕТРЫ ---
