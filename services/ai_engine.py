@@ -1,10 +1,13 @@
 import logging
 import base64
 import os
-import aiohttp # Для отправки алерта админу без циклического импорта бота
+import aiohttp
 from openai import AsyncOpenAI, APIStatusError
 import config
-import config_models # Наш новый реестр
+import config_models
+
+# Импортируем из НОВОГО файла
+from services.model_name_check import find_best_replacement
 
 logger = logging.getLogger(__name__)
 
@@ -12,54 +15,43 @@ class AIEngine:
     def __init__(self):
         self.clients = {}
         
-        # 1. Инициализация клиентов (Кошельков)
-        # Если какой-то ключ не задан, используем более дешевый тариф как запасной вариант
-        
-        # START Client
+        # Инициализация клиентов
         if config.KEY_START:
             self.clients["START"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_START)
         
-        # PRO Client (fallback -> START)
         if config.KEY_PRO:
             self.clients["PRO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_PRO)
         else:
             self.clients["PRO"] = self.clients.get("START")
 
-        # NEO Client (fallback -> PRO -> START)
         if config.KEY_NEO:
             self.clients["NEO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_NEO)
         else:
             self.clients["NEO"] = self.clients.get("PRO") or self.clients.get("START")
 
-        # Audio Client (Whisper) - прямой OpenAI
         if config.OPENAI_API_KEY:
             self.client_audio = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
         else:
             self.client_audio = None
             
-        logger.info(f"✅ AI Engine Initialized. Active Clients keys: {list(self.clients.keys())}")
+        logger.info(f"✅ AI Engine Initialized. Active Clients: {list(self.clients.keys())}")
 
     async def _alert_admin(self, error_text):
-        """Тихая отправка уведомления Архитектору (через прямой запрос к API Telegram)"""
         if not config.ADMIN_ID or not config.BOT_TOKEN_ORACLE: return
         try:
             url = f"https://api.telegram.org/bot{config.BOT_TOKEN_ORACLE}/sendMessage"
             payload = {
                 "chat_id": config.ADMIN_ID,
-                "text": f"🆘 <b>SYSTEM ALERT: AI FAILURE</b>\n\nПричина: {error_text}\n\n<i>Система автоматически переключилась на резервный канал.</i>",
+                "text": f"🆘 <b>SYSTEM ALERT: AI HEALING</b>\n\n{error_text}",
                 "parse_mode": "HTML"
             }
             async with aiohttp.ClientSession() as session:
                 await session.post(url, json=payload)
-        except:
-            pass # Если не удалось отправить алерт, не роняем бота
+        except: pass
 
     def _get_client(self, tariff):
-        """Выбирает клиента в зависимости от тарифа пользователя"""
         client = self.clients.get(tariff)
-        if not client:
-            # Fallback на START, если вдруг пришел неизвестный тариф
-            return self.clients.get("START")
+        if not client: return self.clients.get("START")
         return client
 
     def _encode_image(self, image_path):
@@ -69,21 +61,13 @@ class AIEngine:
         except: return None
 
     async def get_response(self, messages, model, user_tariff="START", image_path=None):
-        """
-        user_tariff: Определяет, какой API-ключ (кошелек) будет использован
-        """
-        # 1. Выбираем кошелек (Client)
         client = self._get_client(user_tariff)
-        
-        if not client:
-            return "⚠️ Ошибка: Нет доступных AI-ключей. Обратитесь к админу.", 0
+        if not client: return "⚠️ Ошибка: Нет доступных AI-ключей.", 0
 
-        # 2. Подготовка сообщений (System Prompt)
         current_messages = list(messages)
         if not current_messages or current_messages[0].get('role') != 'system':
             current_messages.insert(0, {"role": "system", "content": config.SYSTEM_PROMPT})
         
-        # 3. Vision logic (Обработка картинок)
         if image_path and os.path.exists(image_path):
             base64_image = self._encode_image(image_path)
             if base64_image:
@@ -95,46 +79,65 @@ class AIEngine:
                     ]
 
         try:
-            # ПОПЫТКА 1: Основной запрос через клиент тарифа
             response = await client.chat.completions.create(
                 model=model,
                 messages=current_messages,
                 temperature=config.AI_TEMPERATURE,
-                extra_headers={
-                    "HTTP-Referer": "https://vnxmatrix.com",
-                    "X-Title": "vnxORACLE",
-                }
+                extra_headers={"HTTP-Referer": "https://vnxmatrix.com", "X-Title": "vnxORACLE"}
             )
             return response.choices[0].message.content, response.usage.total_tokens
 
         except APIStatusError as e:
-            # ПЕРЕХВАТ ОШИБОК (402 = Нет денег, 401 = Ошибка ключа, 5xx = Сервер упал)
             error_code = e.status_code
-            logger.error(f"⚠️ AI API Error {error_code} (Tariff: {user_tariff}): {e}")
+            error_msg = str(e).lower() # Приводим к нижнему регистру для поиска
+            
+            logger.warning(f"⚠️ AI Error {error_code}: {e}")
 
-            if error_code in [402, 401, 403, 429, 500, 502, 503]:
-                # 1. Шлем сигнал админу
-                await self._alert_admin(f"API Error {error_code} on tariff {user_tariff}: {e.message}")
+            # === ЛОГИКА САМОИСЦЕЛЕНИЯ (SELF-HEALING) ===
+            # Ловим 404/400.
+            # Добавил проверку на 'endpoints', так как OpenRouter пишет "No endpoints found"
+            is_model_error = (
+                error_code in [404, 400] and 
+                ("model" in error_msg or "endpoint" in error_msg or "found" in error_msg)
+            )
+
+            if is_model_error:
+                # 1. Ищем замену
+                new_model = await find_best_replacement(model)
+                logger.warning(f"🩹 Healing: Replacing dead model {model} -> {new_model}")
                 
-                # 2. Переключаемся на бесплатную модель (Fallback)
-                # Используем тот же клиент (надеемся, что бесплатная модель сработает даже при 0 балансе)
-                # или fallback клиент, если упал сервер
-                logger.warning(f"🔄 Switching to Fallback Model: {config_models.FALLBACK_MODEL}")
+                # 2. Уведомляем админа
+                await self._alert_admin(f"Модель <code>{model}</code> недоступна.\nОшибка: {e}\n\n♻️ <b>Auto-Healing:</b> Заменяю на <code>{new_model}</code>")
+
                 try:
-                    fallback_resp = await client.chat.completions.create(
-                        model=config_models.FALLBACK_MODEL,
+                    # 3. Повторяем запрос с НОВОЙ моделью
+                    response = await client.chat.completions.create(
+                        model=new_model,
                         messages=current_messages,
+                        temperature=config.AI_TEMPERATURE,
                         extra_headers={"HTTP-Referer": "https://vnxmatrix.com", "X-Title": "vnxORACLE"}
                     )
-                    # Добавляем пометку пользователю
-                    answer = fallback_resp.choices[0].message.content
-                    answer += f"\n\n<i>(⚠️ Сбой основного канала. Ответ сгенерирован {config_models.FALLBACK_NAME})</i>"
-                    return answer, 0
-                except Exception as ex:
-                    logger.critical(f"❌ Fallback failed too: {ex}")
-                    return "⚠️ <b>CRITICAL SYSTEM FAILURE</b>\nИ основной, и резервный каналы недоступны.", 0
+                    
+                    answer = response.choices[0].message.content
+                    answer += f"\n\n<i>(🛠 Auto-switch: {new_model.split('/')[-1]})</i>"
+                    
+                    return answer, response.usage.total_tokens
+
+                except Exception as ex_heal:
+                    logger.error(f"❌ Healing failed: {ex_heal}")
+                    return "⚠️ Сбой системы восстановления. Попробуйте выбрать другую модель в меню.", 0
             
-            # Если ошибка другая (например, 400 Bad Request) — пробрасываем текст
+            # Если денег нет (402)
+            if error_code == 402:
+                 try:
+                    await self._alert_admin(f"💰 Закончился бюджет на тарифе {user_tariff}!")
+                    response = await client.chat.completions.create(
+                        model="mistralai/mistral-7b-instruct:free",
+                        messages=current_messages
+                    )
+                    return response.choices[0].message.content + "\n\n<i>(⚠️ Low Budget Mode)</i>", 0
+                 except: pass
+
             return f"⚠️ Ошибка запроса: {e.message}", 0
             
         except Exception as e:
