@@ -5,8 +5,6 @@ import aiohttp
 from openai import AsyncOpenAI, APIStatusError
 import config
 import config_models
-
-# Импортируем из НОВОГО файла
 from services.model_name_check import find_best_replacement
 
 logger = logging.getLogger(__name__)
@@ -14,37 +12,25 @@ logger = logging.getLogger(__name__)
 class AIEngine:
     def __init__(self):
         self.clients = {}
-        
         # Инициализация клиентов
-        if config.KEY_START:
-            self.clients["START"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_START)
+        if config.KEY_START: self.clients["START"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_START)
         
-        if config.KEY_PRO:
-            self.clients["PRO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_PRO)
-        else:
-            self.clients["PRO"] = self.clients.get("START")
+        if config.KEY_PRO: self.clients["PRO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_PRO)
+        else: self.clients["PRO"] = self.clients.get("START")
 
-        if config.KEY_NEO:
-            self.clients["NEO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_NEO)
-        else:
-            self.clients["NEO"] = self.clients.get("PRO") or self.clients.get("START")
-
-        if config.OPENAI_API_KEY:
-            self.client_audio = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
-        else:
-            self.client_audio = None
-            
-        logger.info(f"✅ AI Engine Initialized. Active Clients: {list(self.clients.keys())}")
+        if config.KEY_NEO: self.clients["NEO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_NEO)
+        else: self.clients["NEO"] = self.clients.get("PRO") or self.clients.get("START")
+        
+        if config.OPENAI_API_KEY: self.client_audio = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+        else: self.client_audio = None
+        
+        logger.info(f"✅ AI Clients Active: {list(self.clients.keys())}")
 
     async def _alert_admin(self, error_text):
         if not config.ADMIN_ID or not config.BOT_TOKEN_ORACLE: return
         try:
             url = f"https://api.telegram.org/bot{config.BOT_TOKEN_ORACLE}/sendMessage"
-            payload = {
-                "chat_id": config.ADMIN_ID,
-                "text": f"🆘 <b>SYSTEM ALERT: AI HEALING</b>\n\n{error_text}",
-                "parse_mode": "HTML"
-            }
+            payload = {"chat_id": config.ADMIN_ID, "text": f"🆘 <b>AI ALERT</b>\n{error_text}", "parse_mode": "HTML"}
             async with aiohttp.ClientSession() as session:
                 await session.post(url, json=payload)
         except: pass
@@ -62,7 +48,7 @@ class AIEngine:
 
     async def get_response(self, messages, model, user_tariff="START", image_path=None):
         client = self._get_client(user_tariff)
-        if not client: return "⚠️ Ошибка: Нет доступных AI-ключей.", 0
+        if not client: return "⚠️ Ошибка: Нет ключей.", 0
 
         current_messages = list(messages)
         if not current_messages or current_messages[0].get('role') != 'system':
@@ -78,6 +64,7 @@ class AIEngine:
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ]
 
+        # --- ПОПЫТКА 1 ---
         try:
             response = await client.chat.completions.create(
                 model=model,
@@ -89,60 +76,55 @@ class AIEngine:
 
         except APIStatusError as e:
             error_code = e.status_code
-            error_msg = str(e).lower() # Приводим к нижнему регистру для поиска
-            
             logger.warning(f"⚠️ AI Error {error_code}: {e}")
 
-            # === ЛОГИКА САМОИСЦЕЛЕНИЯ (SELF-HEALING) ===
-            # Ловим 404/400.
-            # Добавил проверку на 'endpoints', так как OpenRouter пишет "No endpoints found"
-            is_model_error = (
-                error_code in [404, 400] and 
-                ("model" in error_msg or "endpoint" in error_msg or "found" in error_msg)
-            )
+            # === УНИВЕРСАЛЬНАЯ ЛОГИКА ЛЕЧЕНИЯ (HEALING) ===
+            new_model = None
+            reason = ""
+            need_force_free = False
 
-            if is_model_error:
-                # 1. Ищем замену
-                new_model = await find_best_replacement(model)
-                logger.warning(f"🩹 Healing: Replacing dead model {model} -> {new_model}")
+            # 1. Диагностика проблемы
+            if error_code in [404, 400]:
+                reason = "Модель удалена/недоступна (404)"
+                need_force_free = False # Попробуем найти аналог (даже платный, если был платный)
+            
+            elif error_code == 402:
+                reason = "Нет средств (402)"
+                need_force_free = True # СТРОГО ищем бесплатную
+            
+            elif error_code == 401:
+                reason = "Ошибка авторизации провайдера (401)"
+                need_force_free = True # Часто бывает у бесплатных провайдеров, лучше сменить
+
+            # 2. Если проблема известна — лечим
+            if reason:
+                # Ищем замену
+                new_model = await find_best_replacement(model, force_free=need_force_free)
                 
-                # 2. Уведомляем админа
-                await self._alert_admin(f"Модель <code>{model}</code> недоступна.\nОшибка: {e}\n\n♻️ <b>Auto-Healing:</b> Заменяю на <code>{new_model}</code>")
+                log_msg = f"⚠️ <b>{reason}</b>\nТариф: {user_tariff}\nЗамена: <code>{model}</code> ➡️ <code>{new_model}</code>"
+                logger.warning(f"🩹 Healing Action: {model} -> {new_model}")
+                await self._alert_admin(log_msg)
 
                 try:
-                    # 3. Повторяем запрос с НОВОЙ моделью
+                    # ПОВТОРНЫЙ ЗАПРОС (RETRY)
                     response = await client.chat.completions.create(
                         model=new_model,
                         messages=current_messages,
-                        temperature=config.AI_TEMPERATURE,
                         extra_headers={"HTTP-Referer": "https://vnxmatrix.com", "X-Title": "vnxORACLE"}
                     )
-                    
                     answer = response.choices[0].message.content
-                    answer += f"\n\n<i>(🛠 Auto-switch: {new_model.split('/')[-1]})</i>"
-                    
-                    return answer, response.usage.total_tokens
+                    answer += f"\n\n<i>(🛡 System Auto-Switch: {new_model.split('/')[-1]})</i>"
+                    return answer, 0
+                
+                except Exception as ex2:
+                    logger.error(f"❌ Healing failed: {ex2}")
+                    return f"⚠️ Система перегружена (Все каналы заняты).\nКод ошибки: {error_code}", 0
 
-                except Exception as ex_heal:
-                    logger.error(f"❌ Healing failed: {ex_heal}")
-                    return "⚠️ Сбой системы восстановления. Попробуйте выбрать другую модель в меню.", 0
-            
-            # Если денег нет (402)
-            if error_code == 402:
-                 try:
-                    await self._alert_admin(f"💰 Закончился бюджет на тарифе {user_tariff}!")
-                    response = await client.chat.completions.create(
-                        model="mistralai/mistral-7b-instruct:free",
-                        messages=current_messages
-                    )
-                    return response.choices[0].message.content + "\n\n<i>(⚠️ Low Budget Mode)</i>", 0
-                 except: pass
-
-            return f"⚠️ Ошибка запроса: {e.message}", 0
+            return f"⚠️ Ошибка провайдера: {e.message}", 0
             
         except Exception as e:
-            logger.error(f"🧠 Unknown AI Error: {e}")
-            return "⚠️ Неизвестная ошибка нейросети.", 0
+            logger.error(f"🧠 Unknown Error: {e}")
+            return "⚠️ Неизвестная ошибка.", 0
 
     async def transcribe_audio(self, file_path):
         if not self.client_audio: return None
