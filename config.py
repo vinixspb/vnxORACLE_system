@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import config_models # Подключаем реестр
 
 load_dotenv()
 
@@ -11,13 +12,11 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 ADMIN_CONTACT = "@vinixspb"
 
 # --- GOOGLE SHEETS ---
-# Алиас для обратной совместимости с services/sheets_manager.py
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID") or os.getenv("GOOGLE_SHEET_ID")
 GOOGLE_SHEET_ID = SPREADSHEET_ID 
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 
 # --- ARCHIVE ---
-# Конвертация в int обязательна для Telegram API
 archive_id_str = os.getenv("ARCHIVE_CHANNEL_ID")
 ARCHIVE_CHANNEL_ID = int(archive_id_str) if archive_id_str else 0
 
@@ -32,41 +31,23 @@ PAYMENT_INFO = (
 # 🧠 AI ENGINE (MULTI-KEY ROUTING)
 # =========================================================
 
-# 1. Текстовые ключи (Разные кошельки для разных тарифов)
-# Загружаем из .env
+# 1. Текстовые ключи
 KEY_START = os.getenv("OPENROUTER_API_KEY_START")
 KEY_PRO   = os.getenv("OPENROUTER_API_KEY_PRO")
 KEY_NEO   = os.getenv("OPENROUTER_API_KEY_NEO")
 
-# Для обратной совместимости, если старая переменная еще используется где-то
+# Для обратной совместимости
 OPENROUTER_API_KEY = KEY_START or os.getenv("OPENROUTER_API_KEY")
 
-# Базовый URL для текста (Всегда OpenRouter)
 TEXT_BASE_URL = "https://openrouter.ai/api/v1"
-AI_PROVIDER = "OpenRouter" # Маркер провайдера
+AI_PROVIDER = "OpenRouter"
 
-# 2. Графический ключ (KIE.AI)
-KIE_API_KEY = os.getenv("KIE_API_KEY") 
+# 2. Графический ключ
+KIE_API_KEY = os.getenv("KIE_API_KEY")
 
-# --- ТЕКСТОВЫЕ МОДЕЛИ (LLM) ---
-MODEL_BASIC = "google/gemini-2.0-flash:free"
-MODEL_PRO = "microsoft/phi-3-medium-128k-instruct:free"
-MODEL_NEO = "google/gemini-2.0-pro-exp-02-05:free"
-MODEL_DEVSTRAL = "mistralai/mistral-7b-instruct:free"
-MODEL_CHIMERA = "deepseek/deepseek-r1:free"
-MODEL_LIQUID = "liquid/lfm-40b:free"
-
-DEFAULT_MODEL = MODEL_BASIC
-
-# Список для меню
-MODELS_LIST = [
-    ("Gemini 2.0 Flash (Free)", MODEL_BASIC),
-    ("Phi-3 Medium (Free)", MODEL_PRO),
-    ("Gemini 2.0 Pro (Free)", MODEL_NEO),
-    ("Mistral 7B (Free)", MODEL_DEVSTRAL),
-    ("DeepSeek R1 (Free)", MODEL_CHIMERA),
-    ("Liquid LFM (Free)", MODEL_LIQUID)
-]
+# --- МОДЕЛИ ---
+# Берем дефолтную модель из реестра, чтобы не было расхождений
+DEFAULT_MODEL = config_models.DEFAULT_MODEL_ID
 
 # --- ПАРАМЕТРЫ ---
 AI_TEMPERATURE = 0.7
@@ -84,13 +65,11 @@ SYSTEM_PROMPT = (
 # =========================================================
 # 🎨 МОДЕЛИ ГЕНЕРАЦИИ (ИЗОБРАЖЕНИЯ)
 # =========================================================
-# --- START TIER (Free / Cheap) ---
-IMG_POLLINATIONS = "pollinations"          # Бесплатно
+IMG_POLLINATIONS = "pollinations"
 IMG_FLUX_SCHNELL = "black-forest-labs/flux-1-schnell"
 IMG_SDXL = "stabilityai/stable-diffusion-xl-base-1.0"
 IMG_PLAYGROUND = "playgroundai/playground-v2.5-1024px-aesthetic"
 
-# --- PRO/NEO TIER (Premium) ---
 IMG_FLUX_DEV = "black-forest-labs/flux-1-dev"
 IMG_RECRAFT = "recraft-ai/recraft-v3"
 IMG_DALLE3 = "dall-e-3"
@@ -102,8 +81,7 @@ DEFAULT_IMG_MODEL = IMG_FLUX_SCHNELL
 # 🎙 ГОЛОСОВЫЕ ТЕХНОЛОГИИ
 # =========================================================
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") # Для Whisper STT
-
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 VOICE_ADAM = "pNInz6obpgDQGcFmaJgB"
 VOICE_RACHEL = "21m00Tcm4TlvDq8ikWAM"
 VOICE_FIN = "D38z5RcWu1voky8WSVqt"
@@ -133,15 +111,10 @@ TARIFF_INFO = {
 # =========================================================
 # 🎹 ИНТЕРФЕЙС (UI)
 # =========================================================
-# Верхний ряд (Caps Lock)
 BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"
 BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
-
-# Нижний ряд (Capitalize)
 BTN_CHANGE_MODEL = "🧠 Выбор модели"
 BTN_PROFILE = "👤 Мой профиль"
-
-# Системные (Для проверок)
 BTN_TARIFFS = "💳 Тарифные планы"
 BTN_HELP = "🆘 Поддержка"
 
