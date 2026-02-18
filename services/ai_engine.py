@@ -10,19 +10,34 @@ logger = logging.getLogger(__name__)
 
 class AIEngine:
     def __init__(self):
-        # ... (Инициализация такая же, как была раньше) ...
-        # (Просто скопируй блок __init__ из предыдущей версии ai_engine.py)
-        if config.KIE_API_KEY:
-             self.client_llm = AsyncOpenAI(base_url="https://api.kie.ai/v1", api_key=config.KIE_API_KEY)
-        elif config.OPENROUTER_API_KEY:
-             self.client_llm = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=config.OPENROUTER_API_KEY)
-        else:
-             self.client_llm = None
+        self.clients = {}
         
+        # 1. Инициализация клиентов (Кошельков)
+        # Если какой-то ключ не задан, используем более дешевый тариф как запасной вариант
+        
+        # START Client
+        if config.KEY_START:
+            self.clients["START"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_START)
+        
+        # PRO Client (fallback -> START)
+        if config.KEY_PRO:
+            self.clients["PRO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_PRO)
+        else:
+            self.clients["PRO"] = self.clients.get("START")
+
+        # NEO Client (fallback -> PRO -> START)
+        if config.KEY_NEO:
+            self.clients["NEO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_NEO)
+        else:
+            self.clients["NEO"] = self.clients.get("PRO") or self.clients.get("START")
+
+        # Audio Client (Whisper) - прямой OpenAI
         if config.OPENAI_API_KEY:
             self.client_audio = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
         else:
             self.client_audio = None
+            
+        logger.info(f"✅ AI Engine Initialized. Active Clients keys: {list(self.clients.keys())}")
 
     async def _alert_admin(self, error_text):
         """Тихая отправка уведомления Архитектору (через прямой запрос к API Telegram)"""
@@ -39,53 +54,77 @@ class AIEngine:
         except:
             pass # Если не удалось отправить алерт, не роняем бота
 
-    # ... (метод _encode_image оставляем как был) ...
+    def _get_client(self, tariff):
+        """Выбирает клиента в зависимости от тарифа пользователя"""
+        client = self.clients.get(tariff)
+        if not client:
+            # Fallback на START, если вдруг пришел неизвестный тариф
+            return self.clients.get("START")
+        return client
+
     def _encode_image(self, image_path):
         try:
             with open(image_path, "rb") as image_file:
                 return base64.b64encode(image_file.read()).decode('utf-8')
         except: return None
 
-    async def get_response(self, messages, model, image_path=None):
-        if not self.client_llm:
-            return "⚠️ Ошибка: Нейро-ядро отключено.", 0
+    async def get_response(self, messages, model, user_tariff="START", image_path=None):
+        """
+        user_tariff: Определяет, какой API-ключ (кошелек) будет использован
+        """
+        # 1. Выбираем кошелек (Client)
+        client = self._get_client(user_tariff)
         
-        # Подготовка сообщений (System Prompt + Vision)
-        # (Код подготовки messages идентичен предыдущей версии - скопируй его или оставь)
+        if not client:
+            return "⚠️ Ошибка: Нет доступных AI-ключей. Обратитесь к админу.", 0
+
+        # 2. Подготовка сообщений (System Prompt)
         current_messages = list(messages)
         if not current_messages or current_messages[0].get('role') != 'system':
             current_messages.insert(0, {"role": "system", "content": config.SYSTEM_PROMPT})
         
-        # Vision logic (shortened for brevity here, assume same as before)
+        # 3. Vision logic (Обработка картинок)
         if image_path and os.path.exists(image_path):
-             # ... (код vision) ...
-             pass
+            base64_image = self._encode_image(image_path)
+            if base64_image:
+                last_msg = current_messages[-1]
+                if last_msg['role'] == 'user':
+                    current_messages[-1]['content'] = [
+                        {"type": "text", "text": last_msg['content']},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]
 
         try:
-            # ПОПЫТКА 1: Основной запрос
-            response = await self.client_llm.chat.completions.create(
+            # ПОПЫТКА 1: Основной запрос через клиент тарифа
+            response = await client.chat.completions.create(
                 model=model,
                 messages=current_messages,
                 temperature=config.AI_TEMPERATURE,
-                extra_headers={"HTTP-Referer": "https://vnxmatrix.com", "X-Title": "vnxORACLE"}
+                extra_headers={
+                    "HTTP-Referer": "https://vnxmatrix.com",
+                    "X-Title": "vnxORACLE",
+                }
             )
             return response.choices[0].message.content, response.usage.total_tokens
 
         except APIStatusError as e:
             # ПЕРЕХВАТ ОШИБОК (402 = Нет денег, 401 = Ошибка ключа, 5xx = Сервер упал)
             error_code = e.status_code
-            logger.error(f"⚠️ AI API Error {error_code}: {e}")
+            logger.error(f"⚠️ AI API Error {error_code} (Tariff: {user_tariff}): {e}")
 
             if error_code in [402, 401, 403, 429, 500, 502, 503]:
                 # 1. Шлем сигнал админу
-                await self._alert_admin(f"API Error {error_code}: {e.message}")
+                await self._alert_admin(f"API Error {error_code} on tariff {user_tariff}: {e.message}")
                 
-                # 2. Переключаемся на бесплатную модель
+                # 2. Переключаемся на бесплатную модель (Fallback)
+                # Используем тот же клиент (надеемся, что бесплатная модель сработает даже при 0 балансе)
+                # или fallback клиент, если упал сервер
                 logger.warning(f"🔄 Switching to Fallback Model: {config_models.FALLBACK_MODEL}")
                 try:
-                    fallback_resp = await self.client_llm.chat.completions.create(
+                    fallback_resp = await client.chat.completions.create(
                         model=config_models.FALLBACK_MODEL,
-                        messages=current_messages
+                        messages=current_messages,
+                        extra_headers={"HTTP-Referer": "https://vnxmatrix.com", "X-Title": "vnxORACLE"}
                     )
                     # Добавляем пометку пользователю
                     answer = fallback_resp.choices[0].message.content
@@ -95,14 +134,13 @@ class AIEngine:
                     logger.critical(f"❌ Fallback failed too: {ex}")
                     return "⚠️ <b>CRITICAL SYSTEM FAILURE</b>\nИ основной, и резервный каналы недоступны.", 0
             
-            # Если ошибка другая (например, 400 Bad Request из-за кривого промпта) — пробрасываем
+            # Если ошибка другая (например, 400 Bad Request) — пробрасываем текст
             return f"⚠️ Ошибка запроса: {e.message}", 0
             
         except Exception as e:
             logger.error(f"🧠 Unknown AI Error: {e}")
             return "⚠️ Неизвестная ошибка нейросети.", 0
 
-    # ... (метод transcribe_audio оставляем как был) ...
     async def transcribe_audio(self, file_path):
         if not self.client_audio: return None
         try:
