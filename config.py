@@ -29,21 +29,27 @@ PAYMENT_INFO = (
 )
 
 # =========================================================
-# 🧠 AI ENGINE (TEXT CORE - OPENROUTER)
+# 🧠 AI ENGINE (MULTI-KEY ROUTING)
 # =========================================================
 
-# Получаем ключи
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-KIE_API_KEY = os.getenv("KIE_API_KEY") # KIE теперь используется ТОЛЬКО для генерации картинок
+# 1. Текстовые ключи (Разные кошельки для разных тарифов)
+# Загружаем из .env
+KEY_START = os.getenv("OPENROUTER_API_KEY_START")
+KEY_PRO   = os.getenv("OPENROUTER_API_KEY_PRO")
+KEY_NEO   = os.getenv("OPENROUTER_API_KEY_NEO")
 
-# Текстовое ядро ЖЕСТКО привязано к OpenRouter, так как KIE не поддерживает стандартный чат
-AI_PROVIDER = "OpenRouter"
-AI_API_KEY = OPENROUTER_API_KEY
-AI_BASE_URL = "https://openrouter.ai/api/v1"
+# Для обратной совместимости, если старая переменная еще используется где-то
+OPENROUTER_API_KEY = KEY_START or os.getenv("OPENROUTER_API_KEY")
 
-# --- ТЕКСТОВЫЕ МОДЕЛИ (LLM) - FREE MODE ---
-# Временно используем бесплатные версии для тестов OpenRouter
-MODEL_BASIC = "google/gemini-2.0-flash:free" # Исправлено (без -exp)
+# Базовый URL для текста (Всегда OpenRouter)
+TEXT_BASE_URL = "https://openrouter.ai/api/v1"
+AI_PROVIDER = "OpenRouter" # Маркер провайдера
+
+# 2. Графический ключ (KIE.AI)
+KIE_API_KEY = os.getenv("KIE_API_KEY") 
+
+# --- ТЕКСТОВЫЕ МОДЕЛИ (LLM) ---
+MODEL_BASIC = "google/gemini-2.0-flash:free"
 MODEL_PRO = "microsoft/phi-3-medium-128k-instruct:free"
 MODEL_NEO = "google/gemini-2.0-pro-exp-02-05:free"
 MODEL_DEVSTRAL = "mistralai/mistral-7b-instruct:free"
