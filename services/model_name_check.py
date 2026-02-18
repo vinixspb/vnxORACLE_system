@@ -7,11 +7,10 @@ logger = logging.getLogger(__name__)
 async def fetch_openrouter_models():
     """Запрашивает полный список моделей у OpenRouter"""
     url = "https://openrouter.ai/api/v1/models"
-    
-    # Берем любой доступный ключ
+    # Берем любой доступный ключ для доступа к списку
     api_key = config.KEY_START or config.KEY_PRO or config.KEY_NEO
-    if not api_key:
-        return []
+    
+    if not api_key: return []
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -19,63 +18,58 @@ async def fetch_openrouter_models():
                 if resp.status == 200:
                     data = await resp.json()
                     return data.get("data", [])
-                else:
-                    logger.error(f"⚠️ Failed to check models list: {resp.status}")
-                    return []
-    except Exception as e:
-        logger.error(f"⚠️ Network error checking models: {e}")
-        return []
+                else: return []
+    except: return []
 
-async def find_best_replacement(broken_model_id: str):
+async def find_best_replacement(broken_model_id: str, force_free: bool = False):
     """
-    Умный поиск замены.
-    Если сломалась 'google/gemini...free', ищет другую 'google...free'.
+    Ищет замену.
+    force_free=True: Ищет СТРОГО бесплатную модель (нужно при ошибках 402 и 401).
     """
-    logger.info(f"🕵️‍♂️ Checking replacement for dead model: {broken_model_id}")
+    logger.info(f"🕵️‍♂️ Searching replacement for: {broken_model_id} (Force Free: {force_free})")
     
     all_models = await fetch_openrouter_models()
+    
+    # Если список не грузится, возвращаем то, что точно работало в логах
     if not all_models:
-        # Если не удалось получить список, возвращаем Железный Резерв
-        return "mistralai/mistral-7b-instruct:free"
+        return "stepfun/step-3.5-flash:free" 
 
-    # 1. Анализируем, что мы ищем (ключевые слова из старого названия)
     broken_id_lower = broken_model_id.lower()
     keywords = []
     
+    # Собираем ключевые слова бренда
     if "gemini" in broken_id_lower: keywords.append("gemini")
-    if "gpt" in broken_id_lower: keywords.append("gpt")
-    if "claude" in broken_id_lower: keywords.append("claude")
-    if "llama" in broken_id_lower: keywords.append("llama")
+    elif "gpt" in broken_id_lower: keywords.append("gpt")
+    elif "claude" in broken_id_lower: keywords.append("claude")
+    elif "mistral" in broken_id_lower: keywords.append("mistral")
+    elif "deepseek" in broken_id_lower: keywords.append("deepseek")
+    elif "step" in broken_id_lower: keywords.append("step")
     
-    # Если модель была бесплатной, замена ОБЯЗАНА быть бесплатной
-    is_free = ":free" in broken_id_lower
+    # Определяем, нужна ли бесплатная
+    # Если просят принудительно (402) ИЛИ сломанная была бесплатной
+    is_free_needed = force_free or (":free" in broken_id_lower)
 
-    # 2. Ищем кандидата
-    best_candidate = None
-    
+    # 1. Попытка найти похожую модель того же бренда
     for model in all_models:
         mid = model.get("id", "").lower()
         
-        # Если нужна бесплатная, а эта платная — пропускаем
-        if is_free and ":free" not in mid:
+        # Фильтр бесплатности
+        if is_free_needed and ":free" not in mid:
             continue
             
-        # Проверяем совпадение бренда (google, mistral, etc)
-        if all(k in mid for k in keywords):
-            # Нашли! Например искали 'gemini' и нашли 'google/gemini-2.0-pro-exp:free'
-            best_candidate = model.get("id")
-            break 
-    
-    if best_candidate:
-        logger.info(f"✅ Found alive replacement: {best_candidate}")
-        return best_candidate
-    
-    # 3. Если точной замены нет, но нужна бесплатная — берем ЛЮБУЮ бесплатную Mistral или Google
-    if is_free:
-        for model in all_models:
-            mid = model.get("id", "")
-            if ":free" in mid and ("mistral" in mid or "google" in mid):
-                return mid
+        # Фильтр бренда
+        if any(k in mid for k in keywords):
+            return model.get("id")
 
-    # 4. Последний рубеж
-    return "mistralai/mistral-7b-instruct:free"
+    # 2. Если бренда нет, берем ЛЮБУЮ живую бесплатную (Priority List)
+    if is_free_needed:
+        # Приоритет надежности сейчас: Stepfun > Gemini > Mistral > Deepseek
+        priority_keywords = ["stepfun", "google", "mistral", "deepseek"]
+        for pk in priority_keywords:
+            for model in all_models:
+                mid = model.get("id", "")
+                if ":free" in mid and pk in mid:
+                    return mid
+
+    # 3. Полный отчаянный фоллбек (Последняя надежда)
+    return "stepfun/step-3.5-flash:free"
