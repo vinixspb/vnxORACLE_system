@@ -89,28 +89,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboards.get_models_keyboard(user_id, curr),
             parse_mode='HTML'
         )
-    
     elif data.startswith("setmodel_"):
         new_model = data.split("setmodel_")[1]
         
-        # 🛡 ЗАЩИТА ТАРИФОВ (RBAC)
+        # --- ПРОВЕРКА ПРАВ (через реестр) ---
         user_tariff = sheets_mgr.get_user_tariff(user_id)
         if not config_models.is_model_allowed(user_tariff, new_model):
-            # Если юзер пытается выбрать недоступную модель
-            await query.answer("⛔️ Модель недоступна на вашем тарифе! Обновите подписку.", show_alert=True)
+            await query.answer("⛔️ Модель недоступна на вашем тарифе!", show_alert=True)
             return
-        
-        # Если доступ есть:
+
         USER_MODELS[user_id] = new_model
         context.user_data['mode'] = None
-        
-        # Удаляем меню выбора (чтобы не засорять чат)
         try: await query.message.delete()
         except: pass
         
-        # Ищем красивое имя модели для подтверждения
+        # --- ПОИСК ИМЕНИ (через реестр) ---
+        # Собираем полный список всех возможных моделей для поиска имени
         all_models = config_models.MODELS_START + config_models.MODELS_PRO + config_models.MODELS_NEO
-        # fallback для имени, если вдруг не нашли
+        
+        # Ищем красивое имя. Если не нашли, используем ID.
         model_name = next((name for name, code in all_models if code == new_model), new_model)
         
         await context.bot.send_message(
