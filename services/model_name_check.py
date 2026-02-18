@@ -7,9 +7,7 @@ logger = logging.getLogger(__name__)
 async def fetch_openrouter_models():
     """Запрашивает полный список моделей у OpenRouter"""
     url = "https://openrouter.ai/api/v1/models"
-    # Берем любой доступный ключ для доступа к списку
     api_key = config.KEY_START or config.KEY_PRO or config.KEY_NEO
-    
     if not api_key: return []
 
     try:
@@ -23,16 +21,14 @@ async def fetch_openrouter_models():
 
 async def find_best_replacement(broken_model_id: str, force_free: bool = False):
     """
-    Ищет замену.
-    force_free=True: Ищет СТРОГО бесплатную модель (нужно при ошибках 402 и 401).
+    Ищет замену, ИСКЛЮЧАЯ саму сломанную модель.
     """
     logger.info(f"🕵️‍♂️ Searching replacement for: {broken_model_id} (Force Free: {force_free})")
     
     all_models = await fetch_openrouter_models()
-    
-    # Если список не грузится, возвращаем то, что точно работало в логах
     if not all_models:
-        return "stepfun/step-3.5-flash:free" 
+        # Резерв на случай, если API списков лежит
+        return "mistralai/mistral-7b-instruct:free" 
 
     broken_id_lower = broken_model_id.lower()
     keywords = []
@@ -44,14 +40,17 @@ async def find_best_replacement(broken_model_id: str, force_free: bool = False):
     elif "mistral" in broken_id_lower: keywords.append("mistral")
     elif "deepseek" in broken_id_lower: keywords.append("deepseek")
     elif "step" in broken_id_lower: keywords.append("step")
+    elif "liquid" in broken_id_lower: keywords.append("liquid")
     
-    # Определяем, нужна ли бесплатная
-    # Если просят принудительно (402) ИЛИ сломанная была бесплатной
     is_free_needed = force_free or (":free" in broken_id_lower)
 
-    # 1. Попытка найти похожую модель того же бренда
+    # 1. Ищем модель того же бренда (но другую версию!)
     for model in all_models:
         mid = model.get("id", "").lower()
+        
+        # ГЛАВНОЕ ИСПРАВЛЕНИЕ: Не выбираем ту же самую сломанную модель
+        if mid == broken_id_lower:
+            continue
         
         # Фильтр бесплатности
         if is_free_needed and ":free" not in mid:
@@ -62,14 +61,17 @@ async def find_best_replacement(broken_model_id: str, force_free: bool = False):
             return model.get("id")
 
     # 2. Если бренда нет, берем ЛЮБУЮ живую бесплатную (Priority List)
+    # StepFun убираем из приоритета, раз он глючит (401)
     if is_free_needed:
-        # Приоритет надежности сейчас: Stepfun > Gemini > Mistral > Deepseek
-        priority_keywords = ["stepfun", "google", "mistral", "deepseek"]
+        priority_keywords = ["liquid", "mistral", "google", "deepseek"]
         for pk in priority_keywords:
             for model in all_models:
                 mid = model.get("id", "")
+                # Также проверяем, не является ли это сломанной моделью
+                if mid.lower() == broken_id_lower: continue
+                
                 if ":free" in mid and pk in mid:
                     return mid
 
-    # 3. Полный отчаянный фоллбек (Последняя надежда)
-    return "stepfun/step-3.5-flash:free"
+    # 3. Полный отчаянный фоллбек (Liquid сейчас стабилен)
+    return "liquid/lfm-40b:free"
