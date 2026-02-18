@@ -5,23 +5,21 @@ import config
 # =========================================================
 
 # --- АВАРИЙНАЯ МОДЕЛЬ ---
-# Stepfun сейчас живой, ставим его.
-FALLBACK_MODEL = "stepfun/step-3.5-flash:free"
-FALLBACK_NAME = "StepFun (Emergency)"
+# Используем Liquid LFM - это сейчас одна из самых стабильных бесплатных моделей
+FALLBACK_MODEL = "liquid/lfm-40b:free"
+FALLBACK_NAME = "Liquid LFM (Emergency)"
 
 # --- ДЕФОЛТНАЯ МОДЕЛЬ ---
-DEFAULT_MODEL_ID = "stepfun/step-3.5-flash:free"
+# Ставим ту, которая точно работает, чтобы юзеры не ловили ошибки на старте
+DEFAULT_MODEL_ID = "liquid/lfm-40b:free"
 
 # --- СПИСКИ МОДЕЛЕЙ ---
-# Здесь просто перечисли, что хотим видеть в меню.
-# Реальные ID будут проверяться системой healing.
-
 MODELS_START = [
-    ("Gemini 2.0 Flash (Free)", "google/gemini-2.0-flash-exp:free"),
+    ("Liquid LFM (Free)", "liquid/lfm-40b:free"), # Самая быстрая сейчас
+    ("Gemini 2.0 Flash (Free)", "google/gemini-2.0-flash-lite-preview-02-05:free"),
     ("Mistral 7B (Free)", "mistralai/mistral-7b-instruct:free"),
     ("DeepSeek R1 (Free)", "deepseek/deepseek-r1:free"),
-    ("StepFun (Free)", "stepfun/step-3.5-flash:free"),
-    ("GPT-4o Mini", "openai/gpt-4o-mini"), 
+    ("GPT-4o Mini", "openai/gpt-4o-mini"), # Платная, дешевая
 ]
 
 MODELS_PRO = [
@@ -46,5 +44,4 @@ def is_model_allowed(tariff: str, model_id: str):
     allowed = get_available_models(tariff)
     for name, mid in allowed:
         if mid == model_id: return True
-    # Разрешаем то, что система нашла сама через healing
-    return True
+    return True # Разрешаем динамические замены
