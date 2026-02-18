@@ -11,7 +11,8 @@ async def fetch_openrouter_models():
     if not api_key: return []
 
     try:
-        timeout = aiohttp.ClientTimeout(total=5) # Тайм-аут 5 секунд
+        # Увеличили тайм-аут до 5 секунд, чтобы точно прогрузилось
+        timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as resp:
                 if resp.status == 200:
@@ -20,60 +21,73 @@ async def fetch_openrouter_models():
                 else: return []
     except: return []
 
-async def find_best_replacement(broken_model_id: str, force_free: bool = False, excluded_models: list = None):
+async def find_best_replacement(broken_model_id: str, force_free: bool = False, excluded_models: list = None, excluded_brands: list = None):
     """
-    Ищет замену, исключая ВСЕ модели из списка excluded_models.
-    Приоритет отдается стабильным провайдерам (Google, Mistral).
+    Умный поиск замены.
+    excluded_models: список конкретных ID, которые нельзя предлагать.
+    excluded_brands: список слов (например, ['google']), которые нельзя предлагать.
     """
     if excluded_models is None: excluded_models = []
+    if excluded_brands is None: excluded_brands = []
     
-    # Добавляем саму сломанную модель в исключения
+    # Добавляем сломанную модель в исключения
     if broken_model_id not in excluded_models:
         excluded_models.append(broken_model_id)
 
-    logger.info(f"🕵️‍♂️ Searching replacement. Excluded: {len(excluded_models)} models. Force Free: {force_free}")
+    logger.info(f"🕵️‍♂️ Searching replacement. Excluded: {len(excluded_models)} models, Brands blocked: {excluded_brands}")
     
     all_models = await fetch_openrouter_models()
     
-    # Если список API недоступен, идем по хардкодному списку надежности
+    # Резервный список, если API списков не отвечает
+    fallback_list = [
+        "mistralai/mistral-7b-instruct:free",
+        "liquid/lfm-40b:free",
+        "deepseek/deepseek-r1:free",
+        "huggingfaceh4/zephyr-7b-beta:free",
+        "openchat/openchat-7b:free"
+    ]
+
     if not all_models:
-        hardcoded_fallbacks = [
-            "google/gemini-2.0-flash-lite-preview-02-05:free",
-            "google/gemini-2.0-flash-exp:free",
-            "mistralai/mistral-7b-instruct:free",
-            "deepseek/deepseek-r1:free"
-        ]
-        for m in hardcoded_fallbacks:
+        for m in fallback_list:
             if m not in excluded_models: return m
         return "mistralai/mistral-7b-instruct:free"
 
     broken_id_lower = broken_model_id.lower()
     is_free_needed = force_free or (":free" in broken_id_lower)
 
-    # === СТРАТЕГИЯ 1: Надежные бесплатные бренды (Production Stability) ===
-    # Если мы в режиме аварии (force_free), мы НЕ ищем похожие. Мы ищем РАБОЧИЕ.
-    # Google и Mistral статистически самые надежные на OpenRouter.
+    # Функция проверки, не забанен ли бренд
+    def is_brand_allowed(mid):
+        for brand in excluded_brands:
+            if brand in mid.lower(): return False
+        return True
+
+    # 1. СТРАТЕГИЯ "НАДЕЖНОСТЬ": Ищем Mistral или Liquid (они реже всего требуют куки)
+    # Если мы в режиме force_free, сразу ищем их.
     if is_free_needed:
-        stability_priority = ["google", "mistral", "microsoft", "deepseek"]
-        
-        for brand in stability_priority:
+        reliable_brands = ["mistral", "liquid", "microsoft", "openchat"]
+        for brand in reliable_brands:
+            if brand in excluded_brands: continue
+            
             for model in all_models:
                 mid = model.get("id", "")
-                # Пропускаем, если в черном списке
                 if mid in excluded_models: continue
                 
-                # Ищем бесплатную модель этого бренда
                 if ":free" in mid and brand in mid:
                     return mid
 
-    # === СТРАТЕГИЯ 2: Если не нашли надежных, ищем любую другую ===
+    # 2. СТРАТЕГИЯ "ШИРОКИЙ ПОИСК": Берем любую доступную
     for model in all_models:
         mid = model.get("id", "")
         if mid in excluded_models: continue
         
+        # Проверяем фильтр брендов
+        if not is_brand_allowed(mid): continue
+        
+        # Проверяем бесплатность
         if is_free_needed and ":free" not in mid: continue
         
         return mid
 
-    # === СТРАТЕГИЯ 3: Последний рубеж (если всё в черном списке) ===
+    # 3. ПОСЛЕДНИЙ РУБЕЖ
+    # Если всё перепробовали, возвращаем Mistral, даже если он был в исключениях (лучше попробовать снова, чем упасть)
     return "mistralai/mistral-7b-instruct:free"
