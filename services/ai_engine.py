@@ -13,12 +13,10 @@ class AIEngine:
     def __init__(self):
         self.clients = {}
         
-        # === ДИАГНОСТИКА КЛЮЧЕЙ (В ЛОГИ) ===
-        def mask_key(k): return f"{k[:7]}..." if k and len(k) > 10 else "MISSING/INVALID"
-        
-        logger.info(f"🔑 Key Check: START={mask_key(config.KEY_START)} | PRO={mask_key(config.KEY_PRO)} | NEO={mask_key(config.KEY_NEO)}")
+        # ЛОГИРУЕМ КЛЮЧИ (Скрыто) - Проверь это в логах при старте!
+        def check(k): return "OK" if k and len(k) > 10 else "MISSING"
+        logger.info(f"🔑 Keys Status: START={check(config.KEY_START)} | PRO={check(config.KEY_PRO)}")
 
-        # Инициализация клиентов
         if config.KEY_START: self.clients["START"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_START)
         if config.KEY_PRO: self.clients["PRO"] = AsyncOpenAI(base_url=config.TEXT_BASE_URL, api_key=config.KEY_PRO)
         else: self.clients["PRO"] = self.clients.get("START")
@@ -32,7 +30,7 @@ class AIEngine:
         if not config.ADMIN_ID or not config.BOT_TOKEN_ORACLE: return
         try:
             url = f"https://api.telegram.org/bot{config.BOT_TOKEN_ORACLE}/sendMessage"
-            payload = {"chat_id": config.ADMIN_ID, "text": f"🆘 <b>AI SURVIVAL MODE</b>\n{error_text}", "parse_mode": "HTML"}
+            payload = {"chat_id": config.ADMIN_ID, "text": f"🆘 <b>AI SURVIVAL</b>\n{error_text}", "parse_mode": "HTML"}
             async with aiohttp.ClientSession() as session:
                 await session.post(url, json=payload)
         except: pass
@@ -50,9 +48,8 @@ class AIEngine:
 
     async def get_response(self, messages, model, user_tariff="START", image_path=None):
         client = self._get_client(user_tariff)
-        if not client: return "⚠️ Ошибка системы: AI-ключи не найдены. Обратитесь к администратору.", 0
+        if not client: return "⚠️ Ошибка системы: Нет ключей.", 0
 
-        # Подготовка сообщений
         current_messages = list(messages)
         if not current_messages or current_messages[0].get('role') != 'system':
             current_messages.insert(0, {"role": "system", "content": config.SYSTEM_PROMPT})
@@ -68,20 +65,19 @@ class AIEngine:
                     ]
 
         # =================================================
-        # 🛡 SURVIVAL LOOP (5 ПОПЫТОК)
+        # 🛡 SURVIVAL LOOP (5 Попыток)
         # =================================================
         max_retries = 5
         attempt = 0
         current_model = model
-        blacklist = [] # ID моделей
-        bad_brands = [] # Бренды, которые глючат (например, google)
+        blacklist = [] 
+        bad_brands = [] # Бренды, которые мы забаним в рамках этого запроса
         
         while attempt < max_retries:
             attempt += 1
             try:
-                # В продакшене лучше не пугать юзера лишними логами, но для админа пишем
-                if attempt > 1:
-                    logger.warning(f"🔄 Attempt {attempt}: Trying {current_model}")
+                # Включаем детальный лог только при сбоях
+                if attempt > 1: logger.warning(f"🔄 Try {attempt}/{max_retries}: {current_model}")
                 
                 response = await client.chat.completions.create(
                     model=current_model,
@@ -93,9 +89,7 @@ class AIEngine:
                 answer = response.choices[0].message.content
                 if current_model != model:
                     short_name = current_model.split('/')[-1].replace(":free", "")
-                    # Более профессиональная подпись
-                    answer += f"\n\n<code>[⚙️ channel switched: {short_name}]</code>"
-                
+                    answer += f"\n\n<i>(🛡 Auto-Switch: {short_name})</i>"
                 return answer, response.usage.total_tokens
 
             except APIStatusError as e:
@@ -105,51 +99,51 @@ class AIEngine:
                 
                 blacklist.append(current_model)
 
-                # --- АНАЛИЗ ОШИБКИ ---
+                # --- АНАЛИЗ ---
                 force_free = False
                 
-                # Ошибка "No cookie auth" -> Это проблема Google/Gemini. Баним весь бренд Google.
-                if "cookie" in error_msg or "auth credentials" in error_msg:
-                    force_free = True # Безопаснее уйти на Mistral
-                    if "google" not in bad_brands: bad_brands.append("google")
-                    if "gemini" not in bad_brands: bad_brands.append("gemini")
-                    if "gemma" not in bad_brands: bad_brands.append("gemma")
-                    logger.warning(f"🚫 Blocking brands due to cookie error: {bad_brands}")
+                # 1. Ошибка "Cookie" или 401 на бесплатных моделях -> БАНИМ ВЕСЬ БРЕНД
+                if "cookie" in error_msg or "auth" in error_msg or error_code == 401:
+                    force_free = True
+                    # Если упал Google/Gemma - баним все гугловское
+                    if "google" in current_model or "gemma" in current_model or "gemini" in current_model:
+                        bad_brands.extend(["google", "gemini", "gemma"])
+                        logger.warning("🚫 Banning Google/Gemini due to cookie error")
+                    
+                    # Если упал Stepfun
+                    if "step" in current_model:
+                        bad_brands.append("step")
 
+                # 2. Нет денег (402)
                 elif error_code == 402:
-                    force_free = True # Нет денег
-                elif error_code in [401, 403]:
-                    force_free = True # Ошибка доступа
+                    force_free = True
+                    # Если 402 упал на GPT-4o, значит весь OpenAI платный недоступен
+                    if "openai" in current_model or "gpt" in current_model:
+                        bad_brands.extend(["openai", "gpt"])
 
-                # Если это последняя попытка - не кидаем ошибку в лицо, а пишем вежливо
                 if attempt >= max_retries:
-                    logger.error("❌ Survival Loop exhausted.")
-                    return (
-                        "⚠️ <b>Временная перегрузка нейросети.</b>\n"
-                        "Все каналы связи сейчас заняты или обновляются.\n"
-                        "Пожалуйста, повторите запрос через 1-2 минуты."
-                    ), 0
+                    logger.error("❌ Survival Loop Failed.")
+                    return "⚠️ <b>Все каналы перегружены.</b>\nПовторите запрос позже или выберите другую модель.", 0
 
-                # Ищем замену
+                # Ищем замену, передавая список забаненных брендов
                 new_model = await find_best_replacement(
                     current_model, 
                     force_free=force_free, 
                     excluded_models=blacklist,
-                    excluded_brands=bad_brands # <-- Передаем забаненные бренды
+                    excluded_brands=bad_brands # <--- ВАЖНО
                 )
                 
-                # Если первая попытка упала, тихо сообщаем админу
                 if attempt == 1:
-                    await self._alert_admin(f"⚠️ <b>Swap Triggered</b>\nFrom: {current_model}\nError: {error_code}\nRetry: {new_model}")
+                    await self._alert_admin(f"⚠️ Swap: {current_model} -> {new_model} (Err: {error_code})")
                 
                 current_model = new_model
                 continue
 
             except Exception as e:
-                logger.error(f"🧠 Critical Error: {e}")
-                return "⚠️ Внутренняя ошибка обработки данных.", 0
+                logger.error(f"Critical: {e}")
+                return "⚠️ Критическая ошибка.", 0
         
-        return "⚠️ Нет связи с сервером.", 0
+        return "⚠️ Нет ответа.", 0
 
     async def transcribe_audio(self, file_path):
         if not self.client_audio: return None
