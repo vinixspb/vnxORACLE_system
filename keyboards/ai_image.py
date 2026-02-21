@@ -24,8 +24,10 @@ def get_image_models_keyboard(user_id: int, current_model: str) -> InlineKeyboar
         
     # Кнопка возврата в главное меню возможностей
     keyboard.append([InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")])
+    
+    return InlineKeyboardMarkup(keyboard)
 
-    def get_ratio_keyboard() -> InlineKeyboardMarkup:
+def get_ratio_keyboard() -> InlineKeyboardMarkup:
     """
     Клавиатура выбора пропорций изображения.
     9:16 (Вертикальный) идет первым по умолчанию.
@@ -36,5 +38,3 @@ def get_image_models_keyboard(user_id: int, current_model: str) -> InlineKeyboar
         [InlineKeyboardButton("⏹ Квадратный (1:1)", callback_data="img_ratio_1:1")]
     ]
     return InlineKeyboardMarkup(keyboard)
-    
-    
