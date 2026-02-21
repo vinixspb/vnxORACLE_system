@@ -7,19 +7,18 @@ def get_image_models_keyboard(user_id: int, current_model: str) -> InlineKeyboar
     Показывает базовые модели из тарифа START.
     """
     
-    # Список моделей из config.py для тарифа START
+    # Обновленный список с актуальными названиями моделей
     start_models = {
-        "⚡️ Flux 1 Schnell": config.IMG_FLUX_SCHNELL,
-        "🎨 SD 3 Medium": config.IMG_SD3_TURBO,
-        "🌌 Playground v2.5": config.IMG_PLAYGROUND,
+        "⚡️ Flux Pro (Kontext)": config.IMG_FLUX_SCHNELL,
+        "🍌 Nano Banana (Google)": config.IMG_SD3_TURBO,
+        "🌌 Seedream Art": config.IMG_PLAYGROUND,
         "🆓 Pollinations (Free)": config.IMG_POLLINATIONS
     }
 
     keyboard = []
     
-    # Формируем кнопки с нейросетями (по одной в ряд для удобства чтения)
+    # Формируем кнопки с нейросетями
     for name, code in start_models.items():
-        # Если модель текущая, ставим зеленую галочку
         display_text = f"✅ {name}" if code == current_model else name
         keyboard.append([InlineKeyboardButton(display_text, callback_data=f"setimg_{code}")])
         
