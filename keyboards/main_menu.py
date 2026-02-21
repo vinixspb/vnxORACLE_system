@@ -39,15 +39,19 @@ def get_features_keyboard():
     keyboard = [
         # Ряд 1: Основное общение и Аудио
         [
-            InlineKeyboardButton("💬 Общение AI", callback_data="feature_text"),
-            InlineKeyboardButton("🎤 Аудио AI", callback_data="feature_audio")
+            InlineKeyboardButton("💬 Диалог Ai", callback_data="feature_text"),
+            InlineKeyboardButton("🎤 Аудио Ai", callback_data="feature_audio")
         ],
         # Ряд 2: Генерация медиа
         [
-            InlineKeyboardButton("🎨 Изображения AI", callback_data="feature_design"),
-            InlineKeyboardButton("🎬 Видео AI (Beta)", callback_data="feature_video")
+            InlineKeyboardButton("🎨 Генерация Ai", callback_data="feature_design"),
+            InlineKeyboardButton("🎬 Видео Ai (Beta)", callback_data="feature_video")
         ],
-        # Ряд 3: Знания и Память
+        # Ряд 3: НОВЫЙ МОДУЛЬ OPENCLAW (на всю ширину)
+        [
+            InlineKeyboardButton("🦞 OpenClaw", callback_data="feature_openclaw")
+        ],
+        # Ряд 4: Знания и Память
         [
             InlineKeyboardButton("🗄 Архив (Память)", callback_data="feature_keeper"),
             InlineKeyboardButton("📚 База знаний", callback_data="feature_knowledge")
