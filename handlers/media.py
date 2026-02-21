@@ -3,15 +3,14 @@ import random
 import aiohttp
 import uuid
 import logging
+import asyncio
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 import config
 from loader import sheets_mgr
 from .chat import process_ai_request
-from keyboards.ai_image import get_post_generation_keyboard
 from keyboards.ai_image import get_post_generation_keyboard, get_photo_action_keyboard
-
 
 # Импортируем наш новый движок
 from services.kie_client import kie_studio 
@@ -20,8 +19,6 @@ logger = logging.getLogger(__name__)
 DOWNLOADS_DIR = "downloads"
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
-
-# Замени начало функции generate_image на это:
 
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "vertical"):
     """
@@ -42,13 +39,14 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         enhanced_prompt = f"{prompt}, highly detailed, 8k, cinematic lighting"
         seed = random.randint(1, 999999)
         image_url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
-        # ... дальше код без изменений ...
+        
         try:
             # ИСПОЛЬЗУЕМ send_photo ВМЕСТО reply_photo
             await context.bot.send_photo(
                 chat_id=user_id,
                 photo=image_url, 
                 caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Free)</code>\nRatio: {ratio}\nPrompt: {prompt}", 
+                reply_markup=get_post_generation_keyboard(), # <-- ДОБАВИЛИ КЛАВИАТУРУ
                 parse_mode='HTML'
             )
         except Exception as e:
@@ -85,12 +83,27 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     else:
         await msg.edit_text("❌ <b>Сбой генерации.</b>\nНейросеть отклонила запрос или произошла ошибка тайм-аута.", parse_mode='HTML')
 
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Vision & Img2Img Module (Умный перехват входящих фото)
     """
     user_id = update.effective_user.id
-    if sheets_mgr.get_user_tariff(user_id) not in ['PRO', 'NEO']:
+    
+    # 🛡 Умный механизм повторных попыток (Retry Policy) для Google Sheets
+    user_tariff = 'START' # Значение по умолчанию на случай полного сбоя
+    for attempt in range(3):
+        try:
+            user_tariff = sheets_mgr.get_user_tariff(user_id)
+            break # Если успешно, выходим из цикла
+        except Exception as e:
+            logger.warning(f"⚠️ Google Sheets сбой (попытка {attempt+1}/3): {e}")
+            if attempt == 2: # Если это была последняя попытка
+                logger.error("❌ Google Sheets полностью недоступен.")
+            else:
+                await asyncio.sleep(2) # Ждем 2 секунды перед новой попыткой
+
+    if user_tariff not in ['PRO', 'NEO']:
         return await update.message.reply_text("🧬 <b>VISION / EDIT MODULE</b>\nДоступен на уровнях PRO и NEO.", parse_mode='HTML')
     
     photo = update.message.photo[-1]
