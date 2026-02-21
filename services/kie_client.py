@@ -18,7 +18,6 @@ class KieClient:
     async def generate_image(self, prompt: str, model: str, ratio: str = "vertical") -> str:
         """
         Асинхронная генерация (Create Task -> Polling -> Result)
-        Принимает ratio: "vertical", "horizontal" или "square".
         """
         if not self.api_key:
             logger.error("❌ KIE Client: KIE_API_KEY is missing.")
@@ -33,39 +32,39 @@ class KieClient:
         elif "seedream" in model_lower: model_family = "seedream"
         elif "gpt" in model_lower or "dall" in model_lower: model_family = "gpt"
 
-        # 🧠 2. УНИВЕРСАЛЬНАЯ МАТРИЦА (Ковровая бомбардировка параметрами)
+        # 🧠 2. ИДЕАЛЬНАЯ МАТРИЦА (По официальным спецификациям KIE)
         config_matrix = {
             "vertical": {
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "gpt": {"resolution": "1024x1792", "size": "1024x1792", "image_size": "1024x1792", "aspect_ratio": "9:16"},
-                "default": {"resolution": "1024x1792", "aspect_ratio": "9:16"}
+                "gpt": {"image_size": "9:16", "output_format": "png"},
+                "default": {"aspect_ratio": "9:16"}
             },
             "horizontal": {
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "gpt": {"resolution": "1792x1024", "size": "1792x1024", "image_size": "1792x1024", "aspect_ratio": "16:9"},
-                "default": {"resolution": "1792x1024", "aspect_ratio": "16:9"}
+                "gpt": {"image_size": "16:9", "output_format": "png"},
+                "default": {"aspect_ratio": "16:9"}
             },
             "square": {
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "gpt": {"resolution": "1024x1024", "size": "1024x1024", "image_size": "1024x1024", "aspect_ratio": "1:1"},
-                "default": {"resolution": "1024x1024", "aspect_ratio": "1:1"}
+                "gpt": {"image_size": "1:1", "output_format": "png"},
+                "default": {"aspect_ratio": "1:1"}
             }
         }
 
-        # Безопасное извлечение (если пришел мусор, берем vertical)
+        # Безопасное извлечение
         safe_ratio = ratio if ratio in config_matrix else "vertical"
         params = config_matrix[safe_ratio][model_family]
 
-        # 🧠 3. Собираем payload
+        # 🧠 3. Собираем идеальный payload
         input_data = {
             "prompt": prompt,
             "num_images": 1
         }
         
-        # Динамически заливаем все нужные параметры из матрицы в input
+        # Динамически заливаем нужные ключи
         for key, value in params.items():
             input_data[key] = value
 
@@ -125,7 +124,7 @@ class KieClient:
                             return None
                             
                 except Exception as e:
-                    continue # Игнорируем сетевые скачки
+                    continue 
 
         return None
 
