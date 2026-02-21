@@ -31,41 +31,44 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     
     # --- 1. ЕСЛИ ВЫБРАН БЕСПЛАТНЫЙ POLLINATIONS ---
     if img_model == "pollinations":
-        # Настраиваем размеры для бесплатной нейросети в зависимости от формата
-        if ratio == "9:16":
-            w, h = 576, 1024
-        elif ratio == "16:9":
-            w, h = 1024, 576
-        else:
-            w, h = 1024, 1024
+        if ratio == "9:16": w, h = 576, 1024
+        elif ratio == "16:9": w, h = 1024, 576
+        else: w, h = 1024, 1024
             
         enhanced_prompt = f"{prompt}, highly detailed, 8k, cinematic lighting"
         seed = random.randint(1, 999999)
         image_url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
         
         try:
-            await update.message.reply_photo(
+            # ИСПОЛЬЗУЕМ send_photo ВМЕСТО reply_photo
+            await context.bot.send_photo(
+                chat_id=user_id,
                 photo=image_url, 
                 caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Free)</code>\nRatio: {ratio}\nPrompt: {prompt}", 
                 parse_mode='HTML'
             )
         except Exception as e:
             logger.error(f"Pollinations Error: {e}")
-            await update.message.reply_text("⚠️ Ошибка визуализации.")
+            await context.bot.send_message(chat_id=user_id, text="⚠️ Ошибка визуализации.")
         return
 
     # --- 2. ЕСЛИ ВЫБРАНА МОДЕЛЬ ЧЕРЕЗ KIE.AI (Flux, Midjourney, Dalle и тд) ---
     
-    # Сообщаем пользователю, что начали (т.к. асинхрон может занять 30-60 секунд)
-    msg = await update.message.reply_text("⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", parse_mode='HTML')
+    # ИСПОЛЬЗУЕМ send_message ВМЕСТО reply_text
+    msg = await context.bot.send_message(
+        chat_id=user_id, 
+        text="⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", 
+        parse_mode='HTML'
+    )
     
     # Запускаем генерацию и ПЕРЕДАЕМ FORMAT
     result_url = await kie_studio.generate_image(prompt, img_model, ratio)
     
     if result_url:
         try:
-            # Отправляем фото и удаляем сообщение "Ожидайте"
-            await update.message.reply_photo(
+            # ИСПОЛЬЗУЕМ send_photo ВМЕСТО reply_photo
+            await context.bot.send_photo(
+                chat_id=user_id,
                 photo=result_url, 
                 caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\nPrompt: {prompt}", 
                 parse_mode='HTML'
@@ -76,8 +79,6 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить (возможно, слишком большой размер).\nСсылка: {result_url}")
     else:
         await msg.edit_text("❌ <b>Сбой генерации.</b>\nНейросеть отклонила запрос или произошла ошибка тайм-аута.", parse_mode='HTML')
-
-
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Vision Module (Обработка входящих фото)
