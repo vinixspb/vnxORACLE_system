@@ -2,59 +2,86 @@ import logging
 import asyncio
 import os
 import html
-import config # Импортируем конфиг, чтобы знать ID админа
+import config  # Используем глобальные настройки
 
 logger = logging.getLogger(__name__)
 
 class OpenClawManager:
     def __init__(self):
-        # Укажи здесь свой Telegram ID (или возьми из config.ADMIN_ID)
-        self.admin_id = 262147628 # Твой ID из логов
+        # Теперь ID админа берется прямо из config.py
+        self.admin_id = config.ADMIN_ID
 
     async def check_status(self):
+        """Проверка активности процесса лобстера"""
         try:
-            process = await asyncio.create_subprocess_shell("pgrep -f 'openclaw'", stdout=asyncio.subprocess.PIPE)
+            process = await asyncio.create_subprocess_shell(
+                "pgrep -f 'openclaw'", 
+                stdout=asyncio.subprocess.PIPE
+            )
             stdout, _ = await process.communicate()
             if stdout.decode().strip():
-                return "✅ <b>OpenClaw ONLINE</b>\n🦞 Агент готов к работе."
-            return "💤 <b>OpenClaw OFFLINE</b>"
-        except: return "⚠️ Ошибка связи."
+                return "✅ <b>OpenClaw ONLINE</b>\n🦞 Агент синхронизирован с ядром."
+            return "💤 <b>OpenClaw OFFLINE</b>\nДемон не найден в системе."
+        except Exception as e:
+            logger.error(f"Status check error: {e}")
+            return "⚠️ Ошибка связи с системной шиной."
 
-    async def execute_task(self, task_description: str, user_id: int):
+    async def execute_task(self, task_description: str, user_id: int, user_display_name: str = "User"):
+        """
+        Выполнение задачи. 
+        Для Админа — полный доступ. 
+        Для Юзера — режим Read-Only.
+        """
         is_admin = (user_id == self.admin_id)
         
-        # Если не админ — жестко ограничиваем промпт
+        # Формируем контекст безопасности
         if not is_admin:
+            # Жесткая системная установка для обычных пользователей
             instruction = (
-                "SYSTEM RULES: You are in READ-ONLY mode. "
-                "Forbidden: creating files, deleting, renaming, executing bash scripts that modify the system, installing packages. "
-                "Allowed: ONLY reading information, answering questions, analyzing existing logs. "
-                "If user asks for forbidden action, say you don't have permissions. "
-                f"USER TASK: {task_description}"
+                f"SYSTEM RULES for user {user_display_name}: You are in READ-ONLY mode. "
+                "You can only: list files, read content of files, check system status, answer questions. "
+                "STRICTLY FORBIDDEN: create, delete, edit files, install packages, change settings. "
+                "If user asks for forbidden action, politely explain your security limitations. "
+                f"USER REQUEST: {task_description}"
             )
         else:
-            instruction = task_description
+            # Для тебя — полная свобода действий
+            instruction = f"ADMIN COMMAND from {user_display_name}: {task_description}"
 
         try:
-            safe_task = instruction.replace('"', '\\"')
+            # Подготовка окружения (пути к Node.js и OpenClaw)
             env = os.environ.copy()
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/node/bin:" + env.get("PATH", "")
             
-            # Запускаем агента с изоляцией сессии
+            # Экранируем только кавычки для bash-команды
+            safe_task = instruction.replace('"', '\\"')
+            
+            # Запуск агента с уникальной сессией для каждого юзера
             cmd = f'openclaw agent --message "{safe_task}" --session-id "tg_{user_id}"'
             
             process = await asyncio.create_subprocess_shell(
-                cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env
+                cmd, 
+                stdout=asyncio.subprocess.PIPE, 
+                stderr=asyncio.subprocess.PIPE, 
+                env=env
             )
             
             stdout, stderr = await process.communicate()
-            # Глубокая очистка вывода от HTML-тегов, которые может вернуть AI
-            raw_output = stdout.decode().strip() or stderr.decode().strip()
-            safe_output = html.escape(raw_output)
-                
+            
+            # Собираем вывод и очищаем его для Telegram
+            raw_result = stdout.decode().strip() or stderr.decode().strip()
+            
+            if not raw_result:
+                return "🦞 <b>Агент:</b> Задача выполнена в фоновом режиме."
+
+            # Экранируем HTML, чтобы спецсимволы (<, >) не ломали сообщение
+            safe_output = html.escape(raw_result)
+            
             return f"🦞 <b>Отчет Агента:</b>\n\n<code>{safe_output}</code>"
             
         except Exception as e:
-            return f"⚠️ Ошибка моста: {html.escape(str(e))}"
+            logger.error(f"Execution error: {e}")
+            return f"⚠️ <b>Критическая ошибка моста:</b>\n<code>{html.escape(str(e))}</code>"
 
+# Глобальный инстанс для использования в хендлерах
 claw_manager = OpenClawManager()
