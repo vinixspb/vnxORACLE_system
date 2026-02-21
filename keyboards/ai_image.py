@@ -56,6 +56,7 @@ def get_photo_action_keyboard() -> InlineKeyboardMarkup:
     """
     keyboard = [
         [InlineKeyboardButton("👁 Распознать (Vision)", callback_data="photo_vision")],
-        [InlineKeyboardButton("🪄 Редактировать (Img2Img)", callback_data="photo_edit")]
+        [InlineKeyboardButton("🪄 Редактировать (Img2Img)", callback_data="photo_edit")],
+        [InlineKeyboardButton("✨ Улучшить качество (Upscale)", callback_data="photo_upscale")]
     ]
     return InlineKeyboardMarkup(keyboard)
