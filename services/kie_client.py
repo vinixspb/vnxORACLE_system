@@ -24,14 +24,6 @@ class KieClient:
             logger.error("❌ KIE Client: KIE_API_KEY is missing.")
             return None
 
-        # Переводим пропорции в точное разрешение для Flux / SD
-        resolutions = {
-            "1:1": "1024x1024",
-            "9:16": "768x1344",
-            "16:9": "1344x768"
-        }
-        res = resolutions.get(ratio, "768x1344")
-
         # ==========================================
         # 1. СОЗДАЕМ ЗАДАЧУ (CREATE TASK)
         # ==========================================
@@ -40,13 +32,15 @@ class KieClient:
             "model": model,
             "input": {
                 "prompt": prompt,
-                "resolution": res,           # <-- Точное разрешение (например, 768x1344)
-                "aspect_ratio": ratio,       # <-- Соотношение для API
+                "resolution": "1K",          # <-- Требование KIE API (1K или 2K)
+                "aspect_ratio": ratio,       # <-- Наш формат: "9:16", "1:1", "16:9"
                 "num_images": 1
             }
         }
 
         task_id = None
+        # ... дальше код отправки запроса без изменений ...
+        
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
                 async with session.post(create_url, json=payload) as resp:
