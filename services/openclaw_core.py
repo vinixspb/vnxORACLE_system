@@ -53,10 +53,13 @@ class OpenClawManager:
             env = os.environ.copy()
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/node/bin:" + env.get("PATH", "")
             
+            # 💉 ВПРЫСКИВАЕМ КЛЮЧИ НАПРЯМУЮ ИЗ КОНФИГА:
+            env["OPENROUTER_API_KEY"] = config.KEY_NEO
+            
             # Экранируем только кавычки для bash-команды
             safe_task = instruction.replace('"', '\\"')
             
-            # Запуск агента с уникальной сессией для каждого юзера
+            # Запуск агента
             cmd = f'openclaw agent --message "{safe_task}" --session-id "tg_{user_id}"'
             
             process = await asyncio.create_subprocess_shell(
@@ -65,6 +68,7 @@ class OpenClawManager:
                 stderr=asyncio.subprocess.PIPE, 
                 env=env
             )
+           
             
             stdout, stderr = await process.communicate()
             
