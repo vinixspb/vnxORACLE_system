@@ -188,18 +188,36 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🦞 OPENCLAW (АВТОНОМНЫЙ ИИ-АГЕНТ)
     # =========================================================
     elif data == "feature_openclaw":
-        context.user_data['mode'] = 'openclaw_wait'
+        from services.openclaw_core import claw_manager
         
+        # Получаем живой статус из системы
+        status_info = await claw_manager.check_status()
+        
+        # Определяем права доступа для вывода
+        if user_id == config.ADMIN_ID:
+            access_label = (
+                "🔓 <b>Уровень: АРХИТЕКТОР (ROOT)</b>\n"
+                "Система разблокирована для прямых терминальных правок и управления ядром."
+            )
+        else:
+            access_label = (
+                "🛡 <b>Уровень: БЕЗОПАСНЫЙ (READ-ONLY)</b>\n"
+                "Доступен мониторинг ресурсов, чтение данных и анализ логов без права изменения."
+            )
+
         claw_text = (
-            "🦞 <b>Система OpenClaw: Доступ к автономному Агенту</b>\n\n"
-            "<i>OpenClaw — это ваш личный ИИ с доступом к серверу, терминалу, почте и фоновым задачам.</i>\n\n"
-            "⚙️ Статус демона: <b>Ожидание развертывания...</b>\n"
-            "Введите команду для Агента или отправьте скрипт интеграции."
+            f"🦞 <b>OpenClaw: Интерфейс vnxMATRIX</b>\n\n"
+            f"Автономный Агент для глубокой интеграции с сервером. Позволяет управлять процессами, "
+            f"анализировать почту и автоматизировать рутину через прямой доступ к среде.\n\n"
+            f"{status_info}\n"
+            f"{access_label}\n\n"
+            f"👇 <b>Введите задачу или запрос для Агента:</b>"
         )
         
+        context.user_data['mode'] = 'openclaw_wait'
         markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")]])
+        
         await query.edit_message_text(claw_text, reply_markup=markup, parse_mode='HTML')
-    
     # =========================================================
     # ⚙️ ОБЩИЕ ДЕЙСТВИЯ
     # =========================================================
