@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 import config
 from loader import sheets_mgr
 from .chat import process_ai_request
+from keyboards.ai_image import get_post_generation_keyboard
 
 # Импортируем наш новый движок
 from services.kie_client import kie_studio 
