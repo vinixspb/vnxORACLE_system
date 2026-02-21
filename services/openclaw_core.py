@@ -1,6 +1,6 @@
 import logging
 import asyncio
-import subprocess
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -12,53 +12,54 @@ class OpenClawManager:
         self.is_installed = True
 
     async def check_status(self):
-        """Проверяет, жив ли системный процесс лобстера"""
+        """Проверяет, жив ли системный процесс лобстера (напрямую в ОЗУ)"""
         try:
+            # pgrep ищет процесс по имени, игнорируя барьеры systemd
             process = await asyncio.create_subprocess_shell(
-                "systemctl --user is-active openclaw-gateway.service",
+                "pgrep -f 'openclaw'",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, _ = await process.communicate()
-            status = stdout.decode().strip()
             
-            if status == "active":
+            if stdout.decode().strip():
                 return "✅ <b>OpenClaw ONLINE</b> (Порт: 18789)\n🦞 Агент подключен к ядру сервера и ожидает приказов."
             else:
-                return f"💤 <b>OpenClaw OFFLINE</b> ({status})\nСлужба остановлена."
+                return "💤 <b>OpenClaw OFFLINE</b>\nПроцесс демона не найден в памяти."
         except Exception as e:
             logger.error(f"OpenClaw Status Error: {e}")
-            return "⚠️ Ошибка связи с системной шиной."
+            return "⚠️ Ошибка связи с ядром."
 
     async def execute_task(self, task_description: str):
         """Отправляет прямую команду лобстеру через терминал"""
         logger.info(f"🦞 Запуск агента: {task_description}")
         
         try:
-            # Безопасно экранируем кавычки, чтобы не сломать bash
             safe_task = task_description.replace('"', '\\"')
             
-            # Команда: openclaw agent --message "Сделай то-то"
+            # ВАЖНО: Добавляем стандартные пути, так как системные демоны часто имеют "урезанный" PATH
+            env = os.environ.copy()
+            env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/node/bin:" + env.get("PATH", "")
+            
+            # Вызываем CLI лобстера
             cmd = f'openclaw agent --message "{safe_task}"'
             
             process = await asyncio.create_subprocess_shell(
                 cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
+                env=env
             )
             
-            # Ждем выполнения (агент может думать и писать код несколько секунд)
             stdout, stderr = await process.communicate()
-            
             output = stdout.decode().strip()
             err = stderr.decode().strip()
             
-            # Если команда упала (например, шлюз недоступен)
+            # Если команда упала
             if process.returncode != 0:
                 logger.error(f"OpenClaw Exec Error: {err}")
                 return f"⚠️ <b>Сбой выполнения Агента:</b>\n<code>{err or output}</code>"
                 
-            # Если всё ок, возвращаем ответ лобстера в Telegram
             return f"🦞 <b>Отчет Агента:</b>\n\n<code>{output}</code>"
             
         except Exception as e:
