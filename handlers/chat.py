@@ -99,6 +99,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Обработка режимов
     mode = context.user_data.get('mode')
+    
+    # =========================================================
+    # 🦞 РЕЖИМ OPENCLAW (Агент терминала)
+    # =========================================================
+    if mode == 'openclaw_wait':
+        wait_msg = await update.message.reply_text("🦞 <i>Агент принял задачу. Анализирую среду...</i>", parse_mode='HTML')
+        from services.openclaw_core import claw_manager
+        
+        if text.lower() in ['статус', 'status', 'ping']:
+            ans = await claw_manager.check_status()
+        else:
+            ans = await claw_manager.execute_task(text)
+            
+        await wait_msg.edit_text(ans, parse_mode='HTML')
+        return
+    # =========================================================
+
     if mode == 'tts_wait':
         await handle_tts_request(update, context, text)
         return
