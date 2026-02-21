@@ -65,17 +65,16 @@ SYSTEM_PROMPT = (
 # =========================================================
 # 🎨 НАСТРОЙКИ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (KIE API NAMES)
 # =========================================================
-# ВАЖНО: KIE использует короткие имена моделей, а не длинные пути.
-
-# Модель по умолчанию (должна быть одной из переменных ниже)
-DEFAULT_IMG_MODEL = IMG_FLUX_SCHNELL
 
 # Список доступных моделей (Имя в меню : Системное имя KIE)
 # Тариф START
 IMG_POLLINATIONS = "pollinations"          # Бесплатно (работает локально)
 IMG_FLUX_SCHNELL = "flux-kontext-pro"      # Официальное имя Flux в KIE API
-IMG_SD3_TURBO = "google/nano-banana"       # Топовая модель от Google (вместо SD3)
-IMG_PLAYGROUND = "seedream"                # Отличная арт-модель (вместо Playground)
+IMG_SD3_TURBO = "google/nano-banana"       # Топовая модель от Google
+IMG_PLAYGROUND = "seedream"                # Отличная арт-модель
+
+# Модель по умолчанию (должна быть ниже, чтобы переменная уже существовала!)
+DEFAULT_IMG_MODEL = IMG_FLUX_SCHNELL
 
 
 
