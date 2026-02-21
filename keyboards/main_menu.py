@@ -44,7 +44,7 @@ def get_features_keyboard():
         ],
         # Ряд 2: Генерация медиа
         [
-            InlineKeyboardButton("🎨 Генерация Ai", callback_data="feature_design"),
+            InlineKeyboardButton("🎨 Изображения Ai", callback_data="feature_design"),
             InlineKeyboardButton("🎬 Видео Ai (Beta)", callback_data="feature_video")
         ],
         # Ряд 3: НОВЫЙ МОДУЛЬ OPENCLAW (на всю ширину)
