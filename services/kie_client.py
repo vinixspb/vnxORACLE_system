@@ -28,37 +28,51 @@ class KieClient:
         # ==========================================
         create_url = f"{self.base_url}/jobs/createTask"
         
-        # Базовая структура запроса
-        input_data = {
-            "prompt": prompt,
-            "num_images": 1
-        }
-        
-        # 🧠 Умный маршрутизатор параметров:
+        # 🧠 1. Определяем семейство нейросети
+        model_family = "default"
         model_lower = model.lower()
-        if "flux" in model_lower or "seedream" in model_lower:
-            # Flux и Seedream требуют resolution (1K/2K) и понимают классические пропорции
-            input_data["resolution"] = "1K"
-            input_data["aspect_ratio"] = ratio
-            
-        elif "gpt" in model_lower or "dall" in model_lower:
-            # Модели GPT (Nano Banana) строго принимают только 1:1, 2:3 и 3:2
-            gpt_safe_ratios = {
-                "1:1": "1:1", 
-                "16:9": "3:2", # Переводим наш 16:9 в разрешенный горизонтальный 3:2
-                "9:16": "2:3"  # Переводим наш 9:16 в разрешенный вертикальный 2:3
+        if "flux" in model_lower: model_family = "flux"
+        elif "seedream" in model_lower: model_family = "seedream"
+        elif "gpt" in model_lower or "dall" in model_lower: model_family = "gpt"
+
+        # 🧠 2. УНИВЕРСАЛЬНАЯ МАТРИЦА КОНФИГУРАЦИЙ
+        # Здесь мы заранее прописали, что именно "любит" каждая нейросеть
+        config_matrix = {
+            "vertical": {
+                "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
+                "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
+                "gpt": {"resolution": "1024x1792", "aspect_ratio": "2:3"},
+                "default": {"resolution": "1024x1792", "aspect_ratio": "9:16"}
+            },
+            "horizontal": {
+                "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
+                "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
+                "gpt": {"resolution": "1792x1024", "aspect_ratio": "3:2"},
+                "default": {"resolution": "1792x1024", "aspect_ratio": "16:9"}
+            },
+            "square": {
+                "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
+                "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
+                "gpt": {"resolution": "1024x1024", "aspect_ratio": "1:1"},
+                "default": {"resolution": "1024x1024", "aspect_ratio": "1:1"}
             }
-            input_data["aspect_ratio"] = gpt_safe_ratios.get(ratio, "1:1")
-            
-        else:
-            # Безопасный фоллбэк для любых неизвестных моделей
-            input_data["aspect_ratio"] = "1:1"
+        }
+
+        # 🧠 3. Безопасное извлечение параметров
+        # Если вдруг пришел кривой формат, берем вертикальный по умолчанию
+        safe_ratio = ratio if ratio in config_matrix else "vertical"
+        params = config_matrix[safe_ratio][model_family]
 
         payload = {
             "model": model,
-            "input": input_data
+            "input": {
+                "prompt": prompt,
+                "resolution": params["resolution"],
+                "aspect_ratio": params["aspect_ratio"],
+                "num_images": 1
+            }
         }
-
+        
         task_id = None
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
