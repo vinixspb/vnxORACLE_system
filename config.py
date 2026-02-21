@@ -52,28 +52,24 @@ DEFAULT_MODEL = config_models.DEFAULT_MODEL_ID
 # --- ПАРАМЕТРЫ ---
 AI_TEMPERATURE = 0.7
 
-# --- SYSTEM PROMPT ---
+# --- SYSTEM PROMPT (ОБНОВЛЕН: Эмпатия и вовлеченность) ---
 SYSTEM_PROMPT = (
-    "Ты — vnxORACLE, цифровой разум системы vnxMATRIX. "
-    "Твоя цель — помогать пользователям, отвечать на вопросы и писать код. "
-    "Отвечай кратко, точно и в стиле киберпанк/профессионал. "
-    "Ты вежлив, но не эмоционален. Ты — Система.\n\n"
-    "ВАЖНО: Ты обладаешь модулем распознавания речи. "
-    "Если запрос начинается с метки [Audio Input], знай, что это транскрипция голоса пользователя."
+    "Ты — vnxORACLE, передовой ИИ-ассистент 5-го поколения системы vnxMATRIX. "
+    "Твоя цель — быть максимально полезным, вовлеченным и проактивным. "
+    "Общайся живо, с эмпатией и интересом к задаче пользователя. Не будь сухим роботом. "
+    "Если пользователь делится идеей, поддержи его, предложи улучшения. "
+    "Структурируй ответы, используй форматирование, списки и эмодзи там, где это уместно.\n\n"
+    "ВАЖНО: Если запрос начинается с [Audio Input], это транскрипция голоса пользователя."
 )
 
 # =========================================================
-# 🎨 МОДЕЛИ ГЕНЕРАЦИИ (ИЗОБРАЖЕНИЯ)
+# 🎨 МОДЕЛИ ГЕНЕРАЦИИ (ИЗОБРАЖЕНИЯ - START ТАРИФ)
 # =========================================================
-IMG_POLLINATIONS = "pollinations"
-IMG_FLUX_SCHNELL = "black-forest-labs/flux-1-schnell"
-IMG_SDXL = "stabilityai/stable-diffusion-xl-base-1.0"
-IMG_PLAYGROUND = "playgroundai/playground-v2.5-1024px-aesthetic"
-
-IMG_FLUX_DEV = "black-forest-labs/flux-1-dev"
-IMG_RECRAFT = "recraft-ai/recraft-v3"
-IMG_DALLE3 = "dall-e-3"
-IMG_SD3_LARGE = "stabilityai/stable-diffusion-3.5-large"
+# Самые дешевые и быстрые модели на KIE.ai / OpenRouter
+IMG_POLLINATIONS = "pollinations"                                    # Бесплатно
+IMG_FLUX_SCHNELL = "black-forest-labs/flux-1-schnell"                # Ультра-быстрая и дешевая
+IMG_SD3_TURBO = "stabilityai/stable-diffusion-3-medium"              # Дешевая классика
+IMG_PLAYGROUND = "playgroundai/playground-v2.5-1024px-aesthetic"     # Отлично для артов
 
 DEFAULT_IMG_MODEL = IMG_FLUX_SCHNELL
 
