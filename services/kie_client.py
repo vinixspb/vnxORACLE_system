@@ -15,17 +15,15 @@ class KieClient:
             "Content-Type": "application/json"
         }
 
-    async def generate_image(self, prompt: str, model: str, ratio: str = "9:16") -> str:
+    async def generate_image(self, prompt: str, model: str, ratio: str = "vertical") -> str:
         """
-        Асинхронная генерация изображения (Create Task -> Polling -> Result)
+        Асинхронная генерация (Create Task -> Polling -> Result)
+        Принимает ratio: "vertical", "horizontal" или "square".
         """
         if not self.api_key:
             logger.error("❌ KIE Client: KIE_API_KEY is missing.")
             return None
 
-        # ==========================================
-        # 1. СОЗДАЕМ ЗАДАЧУ (CREATE TASK)
-        # ==========================================
         create_url = f"{self.base_url}/jobs/createTask"
         
         # 🧠 1. Определяем семейство нейросети
@@ -35,46 +33,50 @@ class KieClient:
         elif "seedream" in model_lower: model_family = "seedream"
         elif "gpt" in model_lower or "dall" in model_lower: model_family = "gpt"
 
-        # 🧠 2. УНИВЕРСАЛЬНАЯ МАТРИЦА КОНФИГУРАЦИЙ
-        # Здесь мы заранее прописали, что именно "любит" каждая нейросеть
+        # 🧠 2. УНИВЕРСАЛЬНАЯ МАТРИЦА (Ковровая бомбардировка параметрами)
         config_matrix = {
             "vertical": {
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "gpt": {"resolution": "1024x1792", "aspect_ratio": "2:3"},
+                "gpt": {"resolution": "1024x1792", "size": "1024x1792", "image_size": "1024x1792", "aspect_ratio": "9:16"},
                 "default": {"resolution": "1024x1792", "aspect_ratio": "9:16"}
             },
             "horizontal": {
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "gpt": {"resolution": "1792x1024", "aspect_ratio": "3:2"},
+                "gpt": {"resolution": "1792x1024", "size": "1792x1024", "image_size": "1792x1024", "aspect_ratio": "16:9"},
                 "default": {"resolution": "1792x1024", "aspect_ratio": "16:9"}
             },
             "square": {
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "gpt": {"resolution": "1024x1024", "aspect_ratio": "1:1"},
+                "gpt": {"resolution": "1024x1024", "size": "1024x1024", "image_size": "1024x1024", "aspect_ratio": "1:1"},
                 "default": {"resolution": "1024x1024", "aspect_ratio": "1:1"}
             }
         }
 
-        # 🧠 3. Безопасное извлечение параметров
-        # Если вдруг пришел кривой формат, берем вертикальный по умолчанию
+        # Безопасное извлечение (если пришел мусор, берем vertical)
         safe_ratio = ratio if ratio in config_matrix else "vertical"
         params = config_matrix[safe_ratio][model_family]
 
-        payload = {
-            "model": model,
-            "input": {
-                "prompt": prompt,
-                "resolution": params["resolution"],
-                "aspect_ratio": params["aspect_ratio"],
-                "num_images": 1
-            }
+        # 🧠 3. Собираем payload
+        input_data = {
+            "prompt": prompt,
+            "num_images": 1
         }
         
+        # Динамически заливаем все нужные параметры из матрицы в input
+        for key, value in params.items():
+            input_data[key] = value
+
+        payload = {
+            "model": model,
+            "input": input_data
+        }
+
         task_id = None
         
+        # --- Отправка задачи ---
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
                 async with session.post(create_url, json=payload) as resp:
@@ -85,65 +87,46 @@ class KieClient:
                         return None
                     
                     task_id = data.get("data", {}).get("taskId")
-                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model}, Ratio: {ratio} -> API: {input_data['aspect_ratio']})")
+                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model}, Ratio: {ratio})")
             except Exception as e:
                 logger.error(f"❌ KIE Network Error (Create): {e}")
                 return None
 
-        if not task_id:
-            return None
+        if not task_id: return None
 
-        # ==========================================
-        # 2. ОПРАШИВАЕМ СЕРВЕР (POLLING)
-        # ==========================================
+        # --- Ожидание результата ---
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
-        
-        # Настраиваем лимиты: 60 попыток по 3 секунды = 3 минуты максимум
         max_attempts = 60 
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(max_attempts):
-                await asyncio.sleep(3) # Рекомендованный интервал 2-5 сек
+                await asyncio.sleep(3) 
                 
                 try:
                     async with session.get(query_url) as resp:
                         result_data = await resp.json()
-                        
-                        if result_data.get("code") != 200:
-                            logger.warning(f"⚠️ KIE Polling Error: {result_data}")
-                            continue
+                        if result_data.get("code") != 200: continue
                             
                         task_info = result_data.get("data", {})
                         state = task_info.get("state")
                         
                         if state == "success":
-                            # ВАЖНО: resultJson это строка, парсим её
                             result_json_str = task_info.get("resultJson", "{}")
                             try:
                                 parsed_result = json.loads(result_json_str)
-                                # Достаем первый URL из массива resultUrls
                                 image_url = parsed_result.get("resultUrls", [None])[0]
-                                logger.info(f"🎨 KIE Task {task_id} Completed! URL: {image_url}")
+                                logger.info(f"🎨 KIE Task Completed! URL: {image_url}")
                                 return image_url
                             except json.JSONDecodeError:
-                                logger.error(f"❌ KIE JSON Parse Error: {result_json_str}")
                                 return None
-                                
                         elif state == "fail":
                             fail_msg = task_info.get("failMsg", "Unknown error")
-                            logger.error(f"❌ KIE Task {task_id} Failed: {fail_msg}")
+                            logger.error(f"❌ KIE Task Failed: {fail_msg}")
                             return None
                             
-                        else:
-                            # state может быть: waiting, queuing, generating
-                            logger.info(f"⏳ KIE Task {task_id} state: {state} (Attempt {attempt+1}/{max_attempts})")
-                            
                 except Exception as e:
-                    logger.error(f"❌ KIE Network Error (Polling): {e}")
-                    continue # Игнорируем единичные сбои сети и пробуем снова
+                    continue # Игнорируем сетевые скачки
 
-        logger.warning(f"⚠️ KIE Task {task_id} Timeout: Exceeded {max_attempts} attempts.")
         return None
 
-# Экспортируем готовый объект клиента
 kie_studio = KieClient()
