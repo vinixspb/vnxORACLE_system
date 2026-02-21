@@ -64,7 +64,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     )
     
     # Запускаем генерацию и ПЕРЕДАЕМ FORMAT
-    result_url = await kie_studio.generate_image(prompt, img_model, ratio)
+    result_url, task_id = await kie_studio.generate_image(prompt, img_model, ratio)
     
     if result_url:
         try:
