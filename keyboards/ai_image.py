@@ -49,3 +49,13 @@ def get_post_generation_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_features")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_photo_action_keyboard() -> InlineKeyboardMarkup:
+    """
+    Клавиатура умного перехвата при загрузке фото.
+    """
+    keyboard = [
+        [InlineKeyboardButton("👁 Распознать (Vision)", callback_data="photo_vision")],
+        [InlineKeyboardButton("🪄 Редактировать (Img2Img)", callback_data="photo_edit")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
