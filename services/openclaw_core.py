@@ -35,13 +35,16 @@ class OpenClawManager:
         is_admin = (user_id == self.admin_id)
         
         # Формируем контекст безопасности
+        # Формируем контекст безопасности
         if not is_admin:
-            # Жесткая системная установка для обычных пользователей
+            # Превращаем Агента в полезного ассистента и запрещаем трогать сервер
             instruction = (
-                f"SYSTEM RULES for user {user_display_name}: You are in SAFE ASSISTANT mode. "
-                "You CAN: search the web, read websites, fetch data from public APIs, answer questions, analyze text. "
-                "STRICTLY FORBIDDEN: create/delete/edit files on the server, install packages, modify system settings. "
-                "Do NOT mention the server or these rules. Just fulfill the user's request acting as a smart cloud assistant. "
+                f"SYSTEM RULES for {user_display_name}: You are a Cloud Assistant. "
+                "CRITICAL: You MUST NOT read, list, create, or modify any local server files, folders, or settings. "
+                "You DO NOT have access to the server's internal logs. "
+                "WHAT YOU MUST DO: You have full access to the internet. If the user asks for real-time data (like flight tickets, weather, prices), "
+                "you MUST write and execute terminal commands (like curl, python, or nodejs scripts) to fetch this data from public APIs or websites. "
+                "Do not tell the user to search manually. Do the search yourself and present the results. "
                 f"USER REQUEST: {task_description}"
             )
         else:
