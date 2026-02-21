@@ -68,12 +68,12 @@ SYSTEM_PROMPT = (
 
 # Список доступных моделей (Имя в меню : Системное имя KIE)
 # Тариф START
-IMG_POLLINATIONS = "pollinations"          # Бесплатно (работает локально)
-IMG_FLUX_SCHNELL = "flux-kontext-pro"      # Официальное имя Flux в KIE API
-IMG_SD3_TURBO = "google/nano-banana"       # Топовая модель от Google
-IMG_PLAYGROUND = "seedream"                # Отличная арт-модель
+IMG_POLLINATIONS = "pollinations"                     # Бесплатно (работает локально)
+IMG_FLUX_SCHNELL = "flux-2/pro-text-to-image"         # Официальный Flux 2 на KIE
+IMG_SD3_TURBO = "gpt-image/1.5-text-to-image"         # GPT-4o Image (вместо SD3)
+IMG_PLAYGROUND = "bytedance/seedream-v4-text-to-image"# Seedream 4.0 (шикарные арты)
 
-# Модель по умолчанию (должна быть ниже, чтобы переменная уже существовала!)
+# Модель по умолчанию
 DEFAULT_IMG_MODEL = IMG_FLUX_SCHNELL
 
 
