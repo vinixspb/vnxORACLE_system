@@ -15,13 +15,22 @@ class KieClient:
             "Content-Type": "application/json"
         }
 
-    async def generate_image(self, prompt: str, model: str) -> str:
+    # ДОБАВИЛИ ПАРАМЕТР ratio
+    async def generate_image(self, prompt: str, model: str, ratio: str = "9:16") -> str:
         """
         Асинхронная генерация изображения (Create Task -> Polling -> Result)
         """
         if not self.api_key:
             logger.error("❌ KIE Client: KIE_API_KEY is missing.")
             return None
+
+        # Переводим пропорции в точное разрешение для Flux / SD
+        resolutions = {
+            "1:1": "1024x1024",
+            "9:16": "768x1344",
+            "16:9": "1344x768"
+        }
+        res = resolutions.get(ratio, "768x1344")
 
         # ==========================================
         # 1. СОЗДАЕМ ЗАДАЧУ (CREATE TASK)
@@ -31,8 +40,9 @@ class KieClient:
             "model": model,
             "input": {
                 "prompt": prompt,
-                "aspect_ratio": "16:9", # По умолчанию
-                "num_images": "1"
+                "resolution": res,           # <-- Точное разрешение (например, 768x1344)
+                "aspect_ratio": ratio,       # <-- Соотношение для API
+                "num_images": 1
             }
         }
 
@@ -47,7 +57,7 @@ class KieClient:
                         return None
                     
                     task_id = data.get("data", {}).get("taskId")
-                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model})")
+                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model}, Ratio: {ratio})")
             except Exception as e:
                 logger.error(f"❌ KIE Network Error (Create): {e}")
                 return None
