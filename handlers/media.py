@@ -18,27 +18,28 @@ DOWNLOADS_DIR = "downloads"
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
 
-async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "9:16"):
+# Замени начало функции generate_image на это:
+
+async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "vertical"):
     """
     Умная генерация изображений (KIE AI + Fallback Pollinations)
-    Принимает ratio: "9:16", "16:9" или "1:1". По умолчанию вертикальный.
+    Принимает ratio: "vertical", "horizontal" или "square". По умолчанию vertical.
     """
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
     
-    # Получаем модель из памяти или берем дефолтную (Flux)
     img_model = context.user_data.get('img_model', config.DEFAULT_IMG_MODEL)
     
     # --- 1. ЕСЛИ ВЫБРАН БЕСПЛАТНЫЙ POLLINATIONS ---
     if img_model == "pollinations":
-        if ratio == "9:16": w, h = 576, 1024
-        elif ratio == "16:9": w, h = 1024, 576
+        if ratio == "vertical": w, h = 576, 1024
+        elif ratio == "horizontal": w, h = 1024, 576
         else: w, h = 1024, 1024
             
         enhanced_prompt = f"{prompt}, highly detailed, 8k, cinematic lighting"
         seed = random.randint(1, 999999)
         image_url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
-        
+        # ... дальше код без изменений ...
         try:
             # ИСПОЛЬЗУЕМ send_photo ВМЕСТО reply_photo
             await context.bot.send_photo(
