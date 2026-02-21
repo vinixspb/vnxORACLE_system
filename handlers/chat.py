@@ -153,18 +153,24 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = None
         return
 
-   # 🎨 ПЕРЕХВАТЧИК ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ
+  # 🎨 ПЕРЕХВАТЧИК ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (ШАГ 1: ЗАПРОС ФОРМАТА)
     if mode == 'img_wait' or text.startswith("/img "):
-        # Очищаем промпт от команды, если юзер использовал /img
         prompt = text[5:] if text.startswith("/img ") else text
         
-        # Сбрасываем режим, чтобы бот вернулся в состояние диалога
+        # Сбрасываем режим
         context.user_data['mode'] = None
         
-        # Передаем эстафету в твой продвинутый модуль media.py
-        from .media import generate_image
-        await generate_image(update, context, prompt)
+        # Сохраняем промпт в памяти пользователя, чтобы достать его после клика
+        context.user_data['img_prompt'] = prompt
+        
+        # Вызываем клавиатуру с выбором формата
+        from keyboards.ai_image import get_ratio_keyboard
+        await update.message.reply_text(
+            f"📐 <b>Выберите формат изображения:</b>\n\n"
+            f"<i>Промпт: {prompt[:50]}...</i>",
+            reply_markup=get_ratio_keyboard(),
+            parse_mode='HTML'
+        )
         return
-
     # --- СТАНДАРТНЫЙ ЗАПРОС К ИИ ---
     await process_ai_request(update, context, text)
