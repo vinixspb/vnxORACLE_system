@@ -148,6 +148,52 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"🎨 <b>Модель выбрана!</b>\nРежим: <code>{new_model}</code>\n\n👇 Опишите, что вы хотите увидеть:",
             parse_mode='HTML'
         )
+
+    # =========================================================
+    # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО (УМНЫЙ ПЕРЕХВАТ)
+    # =========================================================
+    elif data == "photo_vision":
+        # Пользователь хочет распознать фото
+        path = context.user_data.get('last_photo_path')
+        caption = context.user_data.get('last_photo_caption') or "Что на этом фото подробно?"
+
+        if not path or not os.path.exists(path):
+            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            return
+
+        # Удаляем меню с кнопками
+        await query.message.delete()
+        
+        # Отправляем фото в стандартное ядро (Vision)
+        from handlers.chat import process_ai_request
+        await process_ai_request(update, context, caption, image_path=path)
+
+    elif data == "photo_edit":
+        # Пользователь хочет отредактировать фото (Img2Img)
+        path = context.user_data.get('last_photo_path')
+        caption = context.user_data.get('last_photo_caption')
+
+        if not path or not os.path.exists(path):
+            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            return
+
+        # Если юзер кинул фотку без текста, запрашиваем промпт
+        if not caption:
+            context.user_data['mode'] = 'img2img_wait'
+            await query.message.edit_text(
+                "🪄 <b>Режим редактирования</b>\n\nНапишите текстом, что именно нужно изменить или добавить на этом фото:", 
+                parse_mode='HTML'
+            )
+            return
+
+        # Если текст был прикреплен, сразу переходим к генерации
+        await query.message.delete()
+        await query.message.reply_text("⏳ <i>Инициализация модуля Img2Img... (Интеграция с API в процессе)</i>", parse_mode='HTML')
+        # TODO: Здесь будет вызов новой функции generate_image2image
+
+
+
+    
     # =========================================================
     # 📐 ВЫБОР ФОРМАТА ИЗОБРАЖЕНИЯ И ЗАПУСК ГЕНЕРАЦИИ
     # =========================================================
