@@ -148,7 +148,26 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"🎨 <b>Модель выбрана!</b>\nРежим: <code>{new_model}</code>\n\n👇 Опишите, что вы хотите увидеть:",
             parse_mode='HTML'
         )
-
+    # =========================================================
+    # 📐 ВЫБОР ФОРМАТА ИЗОБРАЖЕНИЯ И ЗАПУСК ГЕНЕРАЦИИ
+    # =========================================================
+    elif data.startswith("img_ratio_"):
+        # Извлекаем формат из callback_data (например, "9:16")
+        ratio = data.split("_")[2] 
+        
+        # Достаем сохраненный промпт
+        prompt = context.user_data.get('img_prompt')
+        if not prompt:
+            await query.answer("⚠️ Ошибка: промпт устарел. Начните заново.", show_alert=True)
+            return
+            
+        # Удаляем сообщение с кнопками формата
+        await query.message.delete()
+        
+        # Запускаем генерацию и передаем туда формат
+        from handlers.media import generate_image
+        await generate_image(update, context, prompt, ratio)
+        
     # =========================================================
     # 🎤 АУДИО СЕРВИСЫ
     # =========================================================
