@@ -38,3 +38,14 @@ def get_ratio_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🖥 Горизонтальное", callback_data="img_ratio_horizontal")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_post_generation_keyboard() -> InlineKeyboardMarkup:
+    """
+    Клавиатура, которая прикрепляется под готовым сгенерированным изображением.
+    Не дает пользователю попасть в тупик.
+    """
+    keyboard = [
+        [InlineKeyboardButton("🔄 Новая генерация", callback_data="ai_image_menu")],
+        [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_features")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
