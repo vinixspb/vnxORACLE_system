@@ -18,9 +18,10 @@ DOWNLOADS_DIR = "downloads"
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
 
-async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str):
+async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "9:16"):
     """
     Умная генерация изображений (KIE AI + Fallback Pollinations)
+    Принимает ratio: "9:16", "16:9" или "1:1". По умолчанию вертикальный.
     """
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
@@ -30,14 +31,22 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     
     # --- 1. ЕСЛИ ВЫБРАН БЕСПЛАТНЫЙ POLLINATIONS ---
     if img_model == "pollinations":
+        # Настраиваем размеры для бесплатной нейросети в зависимости от формата
+        if ratio == "9:16":
+            w, h = 576, 1024
+        elif ratio == "16:9":
+            w, h = 1024, 576
+        else:
+            w, h = 1024, 1024
+            
         enhanced_prompt = f"{prompt}, highly detailed, 8k, cinematic lighting"
         seed = random.randint(1, 999999)
-        image_url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?seed={seed}&width=1024&height=1024&nologo=true"
+        image_url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
         
         try:
             await update.message.reply_photo(
                 photo=image_url, 
-                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Free)</code>\nPrompt: {prompt}", 
+                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Free)</code>\nRatio: {ratio}\nPrompt: {prompt}", 
                 parse_mode='HTML'
             )
         except Exception as e:
@@ -50,15 +59,15 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     # Сообщаем пользователю, что начали (т.к. асинхрон может занять 30-60 секунд)
     msg = await update.message.reply_text("⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", parse_mode='HTML')
     
-    # Запускаем генерацию
-    result_url = await kie_studio.generate_image(prompt, img_model)
+    # Запускаем генерацию и ПЕРЕДАЕМ FORMAT
+    result_url = await kie_studio.generate_image(prompt, img_model, ratio)
     
     if result_url:
         try:
             # Отправляем фото и удаляем сообщение "Ожидайте"
             await update.message.reply_photo(
                 photo=result_url, 
-                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nPrompt: {prompt}", 
+                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\nPrompt: {prompt}", 
                 parse_mode='HTML'
             )
             await msg.delete()
