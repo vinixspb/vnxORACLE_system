@@ -1,6 +1,6 @@
 import os
 import logging
-import html  # Добавили для безопасной отправки текста
+import html
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
@@ -10,12 +10,13 @@ import keyboards
 
 logger = logging.getLogger(__name__)
 
-# --- Вспомогательная функция для очистки HTML ---
+# --- Вспомогательная функция для безопасной отправки текста ---
 def escape_html(text):
+    if text is None: return ""
     return html.escape(str(text))
 
 async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE, input_text: str, image_path: str = None):
-    if not update.message: return # Защита от пустых апдейтов
+    if not update.message: return
     user_id = update.effective_user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
     
@@ -49,7 +50,7 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         db.update_tokens(user_id, tokens_spent)
         
         model_name = model.split('/')[-1].replace(":free", "")
-        # Экранируем ответ AI, чтобы не было ошибок парсинга HTML
+        # Экранируем ответ, чтобы Telegram не ругался на спецсимволы
         safe_response = escape_html(ai_response)
         
         final_text = (f"{safe_response}\n\n<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {db.get_total_tokens(user_id)}</blockquote>")
@@ -62,8 +63,21 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
             try: os.remove(image_path)
             except: pass
 
+# --- ВОЗВРАЩЕННАЯ ФУНКЦИЯ ДЛЯ ОБЪЕКТОВ ---
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if config.ARCHIVE_CHANNEL_ID:
+        try:
+            await context.bot.forward_message(
+                chat_id=config.ARCHIVE_CHANNEL_ID, 
+                from_chat_id=update.effective_chat.id, 
+                message_id=update.message.message_id
+            )
+            await update.message.reply_text("✅ <b>Объект сохранен в архив.</b>", parse_mode='HTML')
+        except Exception as e:
+            logger.error(f"Archive Error: {e}")
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ЗАЩИТА: Если это не текстовое сообщение — выходим
+    # Защита от пустых или нетекстовых сообщений
     if not update.message or not update.message.text:
         return
 
@@ -74,27 +88,39 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
     
-    # Системные перехватчики
+    # Системные перехватчики кнопок
     if text == config.BTN_NEW_DIALOG:
         context.user_data['mode'] = None
         db.create_session(user_id, title="Новый диалог")
-        await update.message.reply_text("♻️ <b>Контекст очищен.</b>", parse_mode='HTML')
+        await update.message.reply_text("♻️ <b>Контекст очищен. Начата новая сессия.</b>", parse_mode='HTML')
+        return
+
+    if text == config.BTN_HISTORY:
+        context.user_data['mode'] = None
+        markup = keyboards.get_history_keyboard(user_id)
+        if not markup: await update.message.reply_text("📂 Архив пуст.")
+        else: await update.message.reply_text("💾 <b>ИСТОРИЯ ЧАТОВ:</b>", reply_markup=markup, parse_mode='HTML')
         return
 
     if text == config.BTN_CHANGE_MODEL:
         context.user_data['mode'] = None
-        await update.message.reply_text("🧩 <b>МЕНЮ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
+        await update.message.reply_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
         return
-    
-    # (Остальные кнопки оставляем как были...)
+        
     if text == config.BTN_PROFILE:
         context.user_data['mode'] = None
         await show_profile(update, user_id)
         return
+        
+    if text == config.BTN_TARIFFS:
+        context.user_data['mode'] = None
+        await send_paywall(update)
+        return
 
-    # Режимы
+    # Обработка активных режимов
     mode = context.user_data.get('mode')
     
+    # 🦞 OPENCLAW MODE
     if mode == 'openclaw_wait':
         wait_msg = await update.message.reply_text("🦞 <i>Агент принял задачу...</i>", parse_mode='HTML')
         from services.openclaw_core import claw_manager
@@ -107,5 +133,21 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await wait_msg.edit_text(ans, parse_mode='HTML')
         return
 
-    # Обычный запрос к AI
+    if mode == 'tts_wait':
+        await handle_tts_request(update, context, text)
+        return
+    if mode == 'sfx_wait':
+        await handle_sfx_request(update, context, text)
+        context.user_data['mode'] = None
+        return
+    if mode == 'img_wait':
+        await generate_image(update, context, text)
+        context.user_data['mode'] = None
+        return
+
+    if text.startswith("/img "):
+        await generate_image(update, context, text[5:])
+        return
+
+    # Обычный запрос к ИИ
     await process_ai_request(update, context, text)
