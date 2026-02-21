@@ -153,32 +153,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = None
         return
 
-    # 🎨 ПЕРЕХВАТЧИК ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ
+   # 🎨 ПЕРЕХВАТЧИК ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ
     if mode == 'img_wait' or text.startswith("/img "):
         # Очищаем промпт от команды, если юзер использовал /img
         prompt = text[5:] if text.startswith("/img ") else text
         
-        # Сбрасываем режим
+        # Сбрасываем режим, чтобы бот вернулся в состояние диалога
         context.user_data['mode'] = None
-        img_model = context.user_data.get('img_model', config.DEFAULT_IMG_MODEL)
         
-        wait_msg = await update.message.reply_text("⏳ <b>Генерирую изображение...</b>\nПодождите пару секунд 🎨", parse_mode='HTML')
-        
-        try:
-            # Безотказный генератор (отличный старт для тарифа START)
-            safe_prompt = urllib.parse.quote(prompt)
-            image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
-            
-            await context.bot.send_photo(
-                chat_id=user_id,
-                photo=image_url,
-                caption=f"🎨 <b>Готово!</b>\n📝 <i>{prompt}</i>\n⚙️ Модель: <code>{img_model}</code>",
-                parse_mode='HTML'
-            )
-            await wait_msg.delete()
-        except Exception as e:
-            logger.error(f"Image Error: {e}")
-            await wait_msg.edit_text(f"⚠️ Ошибка генерации.")
+        # Передаем эстафету в твой продвинутый модуль media.py
+        from .media import generate_image
+        await generate_image(update, context, prompt)
         return
 
     # --- СТАНДАРТНЫЙ ЗАПРОС К ИИ ---
