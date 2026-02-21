@@ -73,6 +73,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                 chat_id=user_id,
                 photo=result_url, 
                 caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\nPrompt: {prompt}", 
+                reply_markup=get_post_generation_keyboard(), # <-- ДОБАВИЛИ КЛАВИАТУРУ
                 parse_mode='HTML'
             )
             await msg.delete()
