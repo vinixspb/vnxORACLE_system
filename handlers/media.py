@@ -10,6 +10,8 @@ import config
 from loader import sheets_mgr
 from .chat import process_ai_request
 from keyboards.ai_image import get_post_generation_keyboard
+from keyboards.ai_image import get_post_generation_keyboard, get_photo_action_keyboard
+
 
 # Импортируем наш новый движок
 from services.kie_client import kie_studio 
@@ -82,25 +84,47 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить (возможно, слишком большой размер).\nСсылка: {result_url}")
     else:
         await msg.edit_text("❌ <b>Сбой генерации.</b>\nНейросеть отклонила запрос или произошла ошибка тайм-аута.", parse_mode='HTML')
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Vision Module (Обработка входящих фото)
+    Vision & Img2Img Module (Умный перехват входящих фото)
     """
     user_id = update.effective_user.id
     if sheets_mgr.get_user_tariff(user_id) not in ['PRO', 'NEO']:
-        return await update.message.reply_text("🧬 <b>VISION MODULE</b>\nДоступен на уровнях PRO и NEO.", parse_mode='HTML')
+        return await update.message.reply_text("🧬 <b>VISION / EDIT MODULE</b>\nДоступен на уровнях PRO и NEO.", parse_mode='HTML')
     
     photo = update.message.photo[-1]
-    caption = update.message.caption or "Что на этом фото?"
+    caption = update.message.caption or "" # Текст, который юзер прикрепил к фото
     
     try:
+        # Скачиваем файл
         file = await context.bot.get_file(photo.file_id)
         path = os.path.join(DOWNLOADS_DIR, f"v_{user_id}_{uuid.uuid4().hex[:8]}.jpg")
         await file.download_to_drive(path)
         
-        # Передаем в ядро чата
-        await process_ai_request(update, context, caption, image_path=path)
+        # 🧠 Сохраняем путь к файлу и текст в "оперативную память" сессии
+        context.user_data['last_photo_path'] = path
+        context.user_data['last_photo_caption'] = caption
+        
+        # Формируем понятную инструкцию для пользователя
+        instruction_text = (
+            "📸 <b>Изображение получено!</b>\n\n"
+            "Выберите, что вы хотите сделать:\n"
+            "👁 <b>Распознать (Vision)</b> — я проанализирую фото и отвечу на ваш вопрос.\n"
+            "🪄 <b>Редактировать (Img2Img)</b> — я изменю фото нейросетью по вашему описанию."
+        )
+        if caption:
+            instruction_text += f"\n\n<i>Ваш промпт: {caption}</i>"
+        else:
+            instruction_text += "\n\n<i>(Вы не прикрепили текст к фото. Если выберете редактирование, я спрошу промпт следующим шагом)</i>"
+
+        # Отправляем меню
+        await update.message.reply_text(
+            text=instruction_text,
+            reply_markup=get_photo_action_keyboard(),
+            parse_mode='HTML'
+        )
         
     except Exception as e: 
-        logger.error(f"Vision Error: {e}")
-        await update.message.reply_text("⚠️ Ошибка загрузки изображения.")
+        logger.error(f"Photo Handle Error: {e}")
+        await update.message.reply_text("⚠️ Ошибка обработки изображения.")
