@@ -42,11 +42,11 @@ class KieClient:
             input_data["aspect_ratio"] = ratio
             
         elif "gpt" in model_lower or "dall" in model_lower:
-            # Модели GPT/DALL-E не понимают 9:16 и не используют resolution
+            # Модели GPT (Nano Banana) строго принимают только 1:1, 2:3 и 3:2
             gpt_safe_ratios = {
                 "1:1": "1:1", 
-                "16:9": "16:9", 
-                "9:16": "1:2"  # Транслируем формат для GPT
+                "16:9": "3:2", # Переводим наш 16:9 в разрешенный горизонтальный 3:2
+                "9:16": "2:3"  # Переводим наш 9:16 в разрешенный вертикальный 2:3
             }
             input_data["aspect_ratio"] = gpt_safe_ratios.get(ratio, "1:1")
             
@@ -71,7 +71,7 @@ class KieClient:
                         return None
                     
                     task_id = data.get("data", {}).get("taskId")
-                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model}, Ratio: {ratio})")
+                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model}, Ratio: {ratio} -> API: {input_data['aspect_ratio']})")
             except Exception as e:
                 logger.error(f"❌ KIE Network Error (Create): {e}")
                 return None
