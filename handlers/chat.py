@@ -1,6 +1,7 @@
 import os
 import logging
 import html
+import urllib.parse # <-- ДОБАВИЛИ ДЛЯ ГЕНЕРАЦИИ ССЫЛОК
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
@@ -16,6 +17,7 @@ def escape_html(text):
     return html.escape(str(text))
 
 async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE, input_text: str, image_path: str = None):
+    # ... (весь твой код process_ai_request оставляем без изменений) ...
     if not update.message: return
     user_id = update.effective_user.id
     user_tariff = sheets_mgr.get_user_tariff(user_id)
@@ -27,7 +29,6 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.TYPING)
     session_id = db.get_active_session(user_id)
     
-    # Авто-заголовок
     history = db.get_history(session_id, limit=1)
     if not history:
         clean_title = input_text.replace("[Audio Input]: ", "")[:30]
@@ -50,7 +51,6 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         db.update_tokens(user_id, tokens_spent)
         
         model_name = model.split('/')[-1].replace(":free", "")
-        # Экранируем ответ, чтобы Telegram не ругался на спецсимволы
         safe_response = escape_html(ai_response)
         
         final_text = (f"{safe_response}\n\n<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {db.get_total_tokens(user_id)}</blockquote>")
@@ -63,8 +63,8 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
             try: os.remove(image_path)
             except: pass
 
-# --- ВОЗВРАЩЕННАЯ ФУНКЦИЯ ДЛЯ ОБЪЕКТОВ ---
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ... (твой код handle_document без изменений) ...
     if config.ARCHIVE_CHANNEL_ID:
         try:
             await context.bot.forward_message(
@@ -76,19 +76,20 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Archive Error: {e}")
 
+# =========================================================
+# 📝 ГЛАВНЫЙ ОБРАБОТЧИК ТЕКСТА (ОБНОВЛЕН)
+# =========================================================
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Защита от пустых или нетекстовых сообщений
     if not update.message or not update.message.text:
         return
 
     from .admin import send_paywall, show_profile
-    from .media import generate_image
     from .audio import handle_tts_request, handle_sfx_request
     
     user_id = update.effective_user.id
     text = update.message.text.strip()
     
-    # Системные перехватчики кнопок
+    # --- СИСТЕМНЫЕ КНОПКИ МЕНЮ ---
     if text == config.BTN_NEW_DIALOG:
         context.user_data['mode'] = None
         db.create_session(user_id, title="Новый диалог")
@@ -117,10 +118,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_paywall(update)
         return
 
-    # Обработка активных режимов
+    # 🦞 ПЕРЕХВАТЧИК КНОПКИ OPENCLAW (Reply Keyboard)
+    if text == config.BTN_OPENCLAW:
+        context.user_data['mode'] = 'openclaw_wait'
+        from services.openclaw_core import claw_manager
+        status_info = await claw_manager.check_status()
+        await update.message.reply_text(
+            f"🦞 <b>Твой Цифровой Секретарь</b>\n\n{status_info}\n\n👇 <b>Что мне найти или сделать для тебя?</b>", 
+            parse_mode='HTML'
+        )
+        return
+
+    # --- ОБРАБОТКА АКТИВНЫХ РЕЖИМОВ ---
     mode = context.user_data.get('mode')
     
-    # 🦞 OPENCLAW MODE
     if mode == 'openclaw_wait':
         wait_msg = await update.message.reply_text("🦞 <i>Агент принял задачу...</i>", parse_mode='HTML')
         from services.openclaw_core import claw_manager
@@ -128,7 +139,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text.lower() in ['статус', 'status', 'ping']:
             ans = await claw_manager.check_status()
         else:
-            ans = await claw_manager.execute_task(text, user_id)
+            ans = await claw_manager.execute_task(text, user_id, update.effective_user.full_name)
             
         await wait_msg.edit_text(ans, parse_mode='HTML')
         return
@@ -136,18 +147,39 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if mode == 'tts_wait':
         await handle_tts_request(update, context, text)
         return
+        
     if mode == 'sfx_wait':
         await handle_sfx_request(update, context, text)
         context.user_data['mode'] = None
         return
-    if mode == 'img_wait':
-        await generate_image(update, context, text)
+
+    # 🎨 ПЕРЕХВАТЧИК ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ
+    if mode == 'img_wait' or text.startswith("/img "):
+        # Очищаем промпт от команды, если юзер использовал /img
+        prompt = text[5:] if text.startswith("/img ") else text
+        
+        # Сбрасываем режим
         context.user_data['mode'] = None
+        img_model = context.user_data.get('img_model', config.DEFAULT_IMG_MODEL)
+        
+        wait_msg = await update.message.reply_text("⏳ <b>Генерирую изображение...</b>\nПодождите пару секунд 🎨", parse_mode='HTML')
+        
+        try:
+            # Безотказный генератор (отличный старт для тарифа START)
+            safe_prompt = urllib.parse.quote(prompt)
+            image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
+            
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=image_url,
+                caption=f"🎨 <b>Готово!</b>\n📝 <i>{prompt}</i>\n⚙️ Модель: <code>{img_model}</code>",
+                parse_mode='HTML'
+            )
+            await wait_msg.delete()
+        except Exception as e:
+            logger.error(f"Image Error: {e}")
+            await wait_msg.edit_text(f"⚠️ Ошибка генерации.")
         return
 
-    if text.startswith("/img "):
-        await generate_image(update, context, text[5:])
-        return
-
-    # Обычный запрос к ИИ
+    # --- СТАНДАРТНЫЙ ЗАПРОС К ИИ ---
     await process_ai_request(update, context, text)
