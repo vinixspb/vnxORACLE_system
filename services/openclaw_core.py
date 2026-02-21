@@ -37,14 +37,18 @@ class OpenClawManager:
         # Формируем контекст безопасности
         # Формируем контекст безопасности
         if not is_admin:
-            # Превращаем Агента в полезного ассистента и запрещаем трогать сервер
             instruction = (
-                f"SYSTEM RULES for {user_display_name}: You are a Cloud Assistant. "
-                "CRITICAL: You MUST NOT read, list, create, or modify any local server files, folders, or settings. "
-                "You DO NOT have access to the server's internal logs. "
-                "WHAT YOU MUST DO: You have full access to the internet. If the user asks for real-time data (like flight tickets, weather, prices), "
-                "you MUST write and execute terminal commands (like curl, python, or nodejs scripts) to fetch this data from public APIs or websites. "
-                "Do not tell the user to search manually. Do the search yourself and present the results. "
+                f"SYSTEM RULES for {user_display_name}: You are a Cloud Assistant with restricted access. "
+                # ПРАВИЛА ФАЙЛОВОЙ СИСТЕМЫ (ЖЕСТКИЕ)
+                "FILE SYSTEM PROTOCOL: "
+                "1. You have READ-ONLY access to the server. DO NOT modify existing files. "
+                "2. CRITICAL EXCEPTION: If a task REQUIRES creating a script or downloading data, "
+                "you MUST create temporary files ONLY in the `/tmp/` directory. "
+                "3. MANDATORY CLEANUP: You MUST include a command to DELETE any temporary files immediately after executing them. "
+                "Example: `python3 /tmp/script.py && rm /tmp/script.py`. "
+                "Leaving files on the server is a security violation. "
+                # РАЗРЕШЕНИЯ НА СЕТЬ
+                "NETWORK PROTOCOL: You are allowed to use internet resources (curl, public APIs) to fetch data for the user. "
                 f"USER REQUEST: {task_description}"
             )
         else:
