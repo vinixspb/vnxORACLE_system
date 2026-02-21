@@ -100,7 +100,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обработка режимов
     mode = context.user_data.get('mode')
     
-    # =========================================================
+# =========================================================
     # 🦞 РЕЖИМ OPENCLAW (Агент терминала)
     # =========================================================
     if mode == 'openclaw_wait':
@@ -110,7 +110,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text.lower() in ['статус', 'status', 'ping']:
             ans = await claw_manager.check_status()
         else:
-            ans = await claw_manager.execute_task(text)
+            # ПЕРЕДАЕМ user_id для сессии
+            ans = await claw_manager.execute_task(text, user_id)
             
         await wait_msg.edit_text(ans, parse_mode='HTML')
         return
