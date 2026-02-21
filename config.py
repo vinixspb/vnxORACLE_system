@@ -68,16 +68,16 @@ SYSTEM_PROMPT = (
 # ВАЖНО: KIE использует короткие имена моделей, а не длинные пути.
 
 # Модель по умолчанию (должна быть одной из переменных ниже)
-DEFAULT_IMG_MODEL = "flux-schnell" 
+DEFAULT_IMG_MODEL = IMG_FLUX_SCHNELL
 
 # Список доступных моделей (Имя в меню : Системное имя KIE)
 # Тариф START
-IMG_FLUX_SCHNELL = "flux-schnell"      # Быстрая, отличный результат (вместо black-forest-labs/flux-1-schnell)
-IMG_SD3_TURBO = "sd3-turbo"            # Stable Diffusion 3 Turbo (вместо stabilityai/stable-diffusion-3-medium)
-IMG_PLAYGROUND = "playground-v2.5"     # Playground v2.5 (вместо playgroundai/playground-v2.5)
+IMG_POLLINATIONS = "pollinations"          # Бесплатно (работает локально)
+IMG_FLUX_SCHNELL = "flux-kontext-pro"      # Официальное имя Flux в KIE API
+IMG_SD3_TURBO = "google/nano-banana"       # Топовая модель от Google (вместо SD3)
+IMG_PLAYGROUND = "seedream"                # Отличная арт-модель (вместо Playground)
 
-# Бесплатная модель (работает локально через media.py, не через KIE)
-IMG_POLLINATIONS = "pollinations"
+
 
 # =========================================================
 # 🎙 ГОЛОСОВЫЕ ТЕХНОЛОГИИ
