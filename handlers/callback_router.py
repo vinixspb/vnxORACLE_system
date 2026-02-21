@@ -183,6 +183,22 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "audio_sfx":
         context.user_data['mode'] = 'sfx_wait'
         await query.message.reply_text("🔊 <b>Опишите звук (на английском):</b>", parse_mode='HTML')
+
+    # =========================================================
+    # 🦞 OPENCLAW (АВТОНОМНЫЙ ИИ-АГЕНТ)
+    # =========================================================
+    elif data == "feature_openclaw":
+        context.user_data['mode'] = 'openclaw_wait'
+        
+        claw_text = (
+            "🦞 <b>Система OpenClaw: Доступ к автономному Агенту</b>\n\n"
+            "<i>OpenClaw — это ваш личный ИИ с доступом к серверу, терминалу, почте и фоновым задачам.</i>\n\n"
+            "⚙️ Статус демона: <b>Ожидание развертывания...</b>\n"
+            "Введите команду для Агента или отправьте скрипт интеграции."
+        )
+        
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")]])
+        await query.edit_message_text(claw_text, reply_markup=markup, parse_mode='HTML')
     
     # =========================================================
     # ⚙️ ОБЩИЕ ДЕЙСТВИЯ
