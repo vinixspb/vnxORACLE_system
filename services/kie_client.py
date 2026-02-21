@@ -15,7 +15,6 @@ class KieClient:
             "Content-Type": "application/json"
         }
 
-    # ДОБАВИЛИ ПАРАМЕТР ratio
     async def generate_image(self, prompt: str, model: str, ratio: str = "9:16") -> str:
         """
         Асинхронная генерация изображения (Create Task -> Polling -> Result)
@@ -28,18 +27,39 @@ class KieClient:
         # 1. СОЗДАЕМ ЗАДАЧУ (CREATE TASK)
         # ==========================================
         create_url = f"{self.base_url}/jobs/createTask"
+        
+        # Базовая структура запроса
+        input_data = {
+            "prompt": prompt,
+            "num_images": 1
+        }
+        
+        # 🧠 Умный маршрутизатор параметров:
+        model_lower = model.lower()
+        if "flux" in model_lower or "seedream" in model_lower:
+            # Flux и Seedream требуют resolution (1K/2K) и понимают классические пропорции
+            input_data["resolution"] = "1K"
+            input_data["aspect_ratio"] = ratio
+            
+        elif "gpt" in model_lower or "dall" in model_lower:
+            # Модели GPT/DALL-E не понимают 9:16 и не используют resolution
+            gpt_safe_ratios = {
+                "1:1": "1:1", 
+                "16:9": "16:9", 
+                "9:16": "1:2"  # Транслируем формат для GPT
+            }
+            input_data["aspect_ratio"] = gpt_safe_ratios.get(ratio, "1:1")
+            
+        else:
+            # Безопасный фоллбэк для любых неизвестных моделей
+            input_data["aspect_ratio"] = "1:1"
+
         payload = {
             "model": model,
-            "input": {
-                "prompt": prompt,
-                "resolution": "1K",          # <-- Требование KIE API (1K или 2K)
-                "aspect_ratio": ratio,       # <-- Наш формат: "9:16", "1:1", "16:9"
-                "num_images": 1
-            }
+            "input": input_data
         }
 
         task_id = None
-        # ... дальше код отправки запроса без изменений ...
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
