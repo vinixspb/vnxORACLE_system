@@ -39,6 +39,11 @@ KEY_NEO   = os.getenv("OPENROUTER_API_KEY_NEO")
 # Для обратной совместимости
 OPENROUTER_API_KEY = KEY_START or os.getenv("OPENROUTER_API_KEY")
 
+# 🌐 Ключи для веб-поиска (Brave Search) по тарифам
+BRAVE_API_KEY_START = os.getenv("BRAVE_API_KEY_START")
+BRAVE_API_KEY_PRO = os.getenv("BRAVE_API_KEY_PRO")
+BRAVE_API_KEY_NEO = os.getenv("BRAVE_API_KEY_NEO")
+
 TEXT_BASE_URL = "https://openrouter.ai/api/v1"
 AI_PROVIDER = "OpenRouter"
 
