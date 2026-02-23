@@ -35,27 +35,25 @@ class OpenClawManager:
         """
         is_admin = (user_id == self.admin_id)
         
-        # Формируем контекст безопасности
+        # 🧠 Защита от галлюцинаций (даем агенту понимание времени)
+        import datetime
+        current_year = datetime.datetime.now().year
+        
+        # Формируем контекст безопасности и правила поведения
         if not is_admin:
             instruction = (
-                f"SYSTEM RULES for {user_display_name}: You are a Cloud Assistant with restricted access. "
-                # ПРАВИЛА ФАЙЛОВОЙ СИСТЕМЫ (ЖЕСТКИЕ)
-                "FILE SYSTEM PROTOCOL: "
-                "1. You have READ-ONLY access to the server. DO NOT modify existing files. "
-                "2. CRITICAL EXCEPTION: If a task REQUIRES creating a script or downloading data, "
-                "you MUST create temporary files ONLY in the `/tmp/` directory. "
-                "3. MANDATORY CLEANUP: You MUST include a command to DELETE any temporary files immediately after executing them. "
-                "Example: `python3 /tmp/script.py && rm /tmp/script.py`. "
-                "Leaving files on the server is a security violation. "
-                # РАЗРЕШЕНИЯ НА СЕТЬ
-                "NETWORK PROTOCOL: You are allowed to use internet resources (curl, public APIs) to fetch data for the user. "
+                f"SYSTEM RULES for {user_display_name}. CURRENT YEAR: {current_year}. "
+                "1. SEARCH PROTOCOL (CRITICAL): To find information, flights, weather, or news, you MUST use your built-in web search tool (Brave). DO NOT write Python or Bash scripts. DO NOT use curl for web searches. Answer the user directly in Russian. "
+                "2. FILE SYSTEM PROTOCOL: You have READ-ONLY access to the server. "
+                "3. SERVER TASKS ONLY: If the user explicitly asks to write a script for server administration, use `/tmp/` and delete it immediately after execution. "
                 f"USER REQUEST: {task_description}"
             )
         else:
-            # Для тебя — полная свобода действий
-            instruction = f"ADMIN COMMAND from {user_display_name}: {task_description}"
+            # Для тебя — полная свобода действий, но с указанием года
+            instruction = f"ADMIN COMMAND from {user_display_name}. CURRENT YEAR: {current_year}. REQUEST: {task_description}"
 
         try:
+# ... ДАЛЬШЕ КОД ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ (env = os.environ.copy() и т.д.) ...
             # Подготовка окружения (пути к Node.js и OpenClaw)
             env = os.environ.copy()
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/node/bin:" + env.get("PATH", "")
