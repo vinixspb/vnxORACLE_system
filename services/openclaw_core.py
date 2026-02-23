@@ -26,7 +26,8 @@ class OpenClawManager:
             logger.error(f"Status check error: {e}")
             return "⚠️ Ошибка связи с системной шиной."
 
-    async def execute_task(self, task_description: str, user_id: int, user_display_name: str = "User"):
+    # 👇 ДОБАВИЛИ ПАРАМЕТР brave_key
+    async def execute_task(self, task_description: str, user_id: int, user_display_name: str = "User", brave_key: str = None):
         """
         Выполнение задачи. 
         Для Админа — полный доступ. 
@@ -34,7 +35,6 @@ class OpenClawManager:
         """
         is_admin = (user_id == self.admin_id)
         
-        # Формируем контекст безопасности
         # Формируем контекст безопасности
         if not is_admin:
             instruction = (
@@ -60,8 +60,12 @@ class OpenClawManager:
             env = os.environ.copy()
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/node/bin:" + env.get("PATH", "")
             
-            # 💉 ВПРЫСКИВАЕМ КЛЮЧИ НАПРЯМУЮ ИЗ КОНФИГА:
+            # 💉 ВПРЫСКИВАЕМ КЛЮЧИ НАПРЯМУЮ ИЗ КОНФИГА И ПАРАМЕТРОВ:
             env["OPENROUTER_API_KEY"] = config.KEY_NEO
+            
+            # 👇 ПЕРЕДАЕМ КЛЮЧ БРАУЗЕРА (ЕСЛИ ЕСТЬ) В ОКРУЖЕНИЕ АГЕНТА
+            if brave_key:
+                env["BRAVE_API_KEY"] = brave_key
             
             # Экранируем только кавычки для bash-команды
             safe_task = instruction.replace('"', '\\"')
@@ -75,7 +79,6 @@ class OpenClawManager:
                 stderr=asyncio.subprocess.PIPE, 
                 env=env
             )
-           
             
             stdout, stderr = await process.communicate()
             
