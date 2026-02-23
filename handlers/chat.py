@@ -183,5 +183,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
         return
+
+    # ПЕРЕХВАТЧИК ПРОМПТА ДЛЯ ВИДЕО
+    if mode == 'video_text_wait':
+        from handlers.video import handle_video_text_request
+        await handle_video_text_request(update, context, text)
+        return
+
+
+    
     # --- СТАНДАРТНЫЙ ЗАПРОС К ИИ ---
     await process_ai_request(update, context, text)
