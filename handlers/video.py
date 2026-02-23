@@ -4,6 +4,8 @@ from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 from services.kie_client import kie_studio
 from loader import sheets_mgr
+from services.prompt_censor import is_prompt_safe
+
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,24 @@ async def handle_video_text_request(update: Update, context: ContextTypes.DEFAUL
     Обработка текстового промпта и запуск рендеринга видео
     """
     user_id = update.effective_user.id
+    async def handle_video_text_request(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str):
+    """
+    Обработка текстового промпта и запуск рендеринга видео
+    """
+    user_id = update.effective_user.id
+    context.user_data['mode'] = None # Сбрасываем режим
+
+    # 🛑 ФИЛЬТР ЦЕНЗУРЫ (Защита от 18+ и траты ресурсов)
+    if not is_prompt_safe(prompt):
+        await update.message.reply_text(
+            "🔞 <b>Запрос отклонен цензурой.</b>\nСистема безопасности заблокировала генерацию. Я не создаю откровенный, NSFW (18+) или жестокий контент. Пожалуйста, измените описание.",
+            parse_mode='HTML'
+        )
+        return # Мгновенно обрываем выполнение!
+
+    # 🛡 Защита: Видео — дорогой процесс, пускаем только PRO и NEO
+    tariff = sheets_mgr.get_user_tariff(user_id)
+# ... дальше идет твой старый код функции ...
     context.user_data['mode'] = None # Сбрасываем режим
 
     # 🛡 Защита: Видео — дорогой процесс, пускаем только PRO и NEO
