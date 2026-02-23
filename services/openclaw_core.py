@@ -89,7 +89,7 @@ class OpenClawManager:
             # Экранируем HTML, чтобы спецсимволы (<, >) не ломали сообщение
             safe_output = html.escape(raw_result)
             
-            return f"🦞 <b>Отчет Агента:</b>\n\n<code>{safe_output}</code>"
+            return f"🦞 <b>Отчет Агента:</b>\n\n{safe_output}"
             
         except Exception as e:
             logger.error(f"Execution error: {e}")
