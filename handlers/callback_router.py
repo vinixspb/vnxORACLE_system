@@ -1,13 +1,11 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes
 import logging
-
 import config
 import config_models  # Наш реестр моделей
 from loader import sheets_mgr, db, USER_MODELS
 import keyboards
-
-# Импортируем функции логики из соседних модулей
+from handlers.video import ask_video_prompt
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ContextTypes
 from .admin import show_profile
 
 logger = logging.getLogger(__name__)
@@ -16,6 +14,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
+    if query.data == "video_text":
+        return await ask_video_prompt(update, context, "text")
+        
+    if query.data == "video_image":
+        return await ask_video_prompt(update, context, "image")
 
     # =========================================================
     # 👤 ПРОФИЛЬ, ТАРИФЫ И ОПЛАТА
