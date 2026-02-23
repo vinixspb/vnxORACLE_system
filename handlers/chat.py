@@ -1,13 +1,16 @@
 import os
 import logging
 import html
+import keyboards
+import config
 import urllib.parse # <-- ДОБАВИЛИ ДЛЯ ГЕНЕРАЦИИ ССЫЛОК
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
-import config
 from loader import sheets_mgr, ai_engine, db, USER_MODELS
-import keyboards
+
+
+from keyboards.ai_video import get_video_menu_keyboard
 
 logger = logging.getLogger(__name__)
 
