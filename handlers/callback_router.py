@@ -1,4 +1,5 @@
 import logging
+import os  # 👈 Добавил жизненно важный импорт для работы с файлами фото!
 import config
 import config_models  # Наш реестр моделей
 from loader import sheets_mgr, db, USER_MODELS
@@ -14,16 +15,38 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
-    if query.data == "video_text":
+    
+    # =========================================================
+    # 🎬 МЕНЮ ВИДЕО AI (РЕЖИССЕРСКАЯ)
+    # =========================================================
+    if data == "video_text":
         return await ask_video_prompt(update, context, "text")
         
-    if query.data == "video_image":
+    elif data == "video_image":
         return await ask_video_prompt(update, context, "image")
+
+    elif data == "feature_video":
+        context.user_data['mode'] = None # Сбрасываем другие режимы
+        
+        from keyboards.ai_video import get_video_menu_keyboard 
+        
+        menu_text = (
+            "🎬 <b>Модуль Видео Ai (Режиссерская)</b>\n\n"
+            "Выберите способ генерации:\n"
+            "📝 <b>По тексту</b> — Опишите сцену, и нейросеть создаст ролик с нуля.\n"
+            "🖼 <b>По картинке</b> — Нейросеть 'оживит' готовую фотографию."
+        )
+        
+        await query.edit_message_text(
+            text=menu_text,
+            reply_markup=get_video_menu_keyboard(),
+            parse_mode='HTML'
+        )
 
     # =========================================================
     # 👤 ПРОФИЛЬ, ТАРИФЫ И ОПЛАТА
     # =========================================================
-    if data == "profile_tariffs":
+    elif data == "profile_tariffs":
         # Собираем красивый текст о тарифах из конфига
         tariffs_text = "\n\n".join(config.TARIFF_INFO.values())
         await query.edit_message_text(
@@ -92,6 +115,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboards.get_models_keyboard(user_id, curr),
             parse_mode='HTML'
         )
+        
     elif data.startswith("setmodel_"):
         new_model = data.split("setmodel_")[1]
         
@@ -107,10 +131,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
         
         # --- ПОИСК ИМЕНИ (через реестр) ---
-        # Собираем полный список всех возможных моделей для поиска имени
         all_models = config_models.MODELS_START + config_models.MODELS_PRO + config_models.MODELS_NEO
-        
-        # Ищем красивое имя. Если не нашли, используем ID.
         model_name = next((name for name, code in all_models if code == new_model), new_model)
         
         await context.bot.send_message(
@@ -126,13 +147,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = None
         curr_img = context.user_data.get('img_model', config.DEFAULT_IMG_MODEL)
         
-        # Проверяем, есть ли модуль клавиатур для картинок (если мы его создали)
         try:
             from keyboards.ai_image import get_image_models_keyboard
             markup = get_image_models_keyboard(user_id, curr_img)
             text = "🎨 <b>СТУДИЯ ДИЗАЙНА</b>\n\nВыберите нейросеть для генерации:"
         except ImportError:
-            # Заглушка, если файл еще не создан
             markup = keyboards.get_features_keyboard()
             text = "🛠 Модуль изображений в процессе настройки..."
 
@@ -141,7 +160,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("setimg_"):
         new_model = data.split("setimg_")[1]
         context.user_data['img_model'] = new_model
-        context.user_data['mode'] = 'img_wait' # Включаем режим ожидания промпта
+        context.user_data['mode'] = 'img_wait'
         
         try: await query.message.delete()
         except: pass
@@ -156,7 +175,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО (УМНЫЙ ПЕРЕХВАТ)
     # =========================================================
     elif data == "photo_vision":
-        # Пользователь хочет распознать фото
         path = context.user_data.get('last_photo_path')
         caption = context.user_data.get('last_photo_caption') or "Что на этом фото подробно?"
 
@@ -164,15 +182,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
             return
 
-        # Удаляем меню с кнопками
         await query.message.delete()
-        
-        # Отправляем фото в стандартное ядро (Vision)
         from handlers.chat import process_ai_request
         await process_ai_request(update, context, caption, image_path=path)
 
     elif data == "photo_edit":
-        # Пользователь хочет отредактировать фото (Img2Img)
         path = context.user_data.get('last_photo_path')
         caption = context.user_data.get('last_photo_caption')
 
@@ -180,7 +194,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
             return
 
-        # Если юзер кинул фотку без текста, запрашиваем промпт
         if not caption:
             context.user_data['mode'] = 'img2img_wait'
             await query.message.edit_text(
@@ -189,31 +202,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Если текст был прикреплен, сразу переходим к генерации
         await query.message.delete()
         await query.message.reply_text("⏳ <i>Инициализация модуля Img2Img... (Интеграция с API в процессе)</i>", parse_mode='HTML')
-        # TODO: Здесь будет вызов новой функции generate_image2image
 
-
-
-    
     # =========================================================
     # 📐 ВЫБОР ФОРМАТА ИЗОБРАЖЕНИЯ И ЗАПУСК ГЕНЕРАЦИИ
     # =========================================================
     elif data.startswith("img_ratio_"):
-        # Извлекаем формат из callback_data (например, "9:16")
         ratio = data.split("_")[2] 
-        
-        # Достаем сохраненный промпт
         prompt = context.user_data.get('img_prompt')
+        
         if not prompt:
             await query.answer("⚠️ Ошибка: промпт устарел. Начните заново.", show_alert=True)
             return
             
-        # Удаляем сообщение с кнопками формата
         await query.message.delete()
-        
-        # Запускаем генерацию и передаем туда формат
         from handlers.media import generate_image
         await generate_image(update, context, prompt, ratio)
         
@@ -252,38 +255,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = 'sfx_wait'
         await query.message.reply_text("🔊 <b>Опишите звук (на английском):</b>", parse_mode='HTML')
 
-    # 🎬 ПЕРЕХВАТЧИК ГЛАВНОГО МЕНЮ "ВИДЕО Ai"
-    if data == "feature_video":
-        context.user_data['mode'] = None # Сбрасываем другие режимы
-        
-        from keyboards.ai_video import get_video_menu_keyboard 
-        
-        menu_text = (
-            "🎬 <b>Модуль Видео Ai (Режиссерская)</b>\n\n"
-            "Выберите способ генерации:\n"
-            "📝 <b>По тексту</b> — Опишите сцену, и нейросеть создаст ролик с нуля.\n"
-            "🖼 <b>По картинке</b> — Нейросеть 'оживит' готовую фотографию."
-        )
-        
-        return await query.edit_message_text(
-            text=menu_text,
-            reply_markup=get_video_menu_keyboard(),
-            parse_mode='HTML'
-        )
-
-
-    
-
     # =========================================================
     # 🦞 OPENCLAW (АВТОНОМНЫЙ ИИ-АГЕНТ)
     # =========================================================
     elif data == "feature_openclaw":
         from services.openclaw_core import claw_manager
-        
-        # Получаем живой статус из системы
         status_info = await claw_manager.check_status()
         
-        # Разделяем интерфейс: для Админа — сервер, для Юзера — облачный помощник
         if user_id == config.ADMIN_ID:
             claw_text = (
                 f"🦞 <b>OpenClaw: Интерфейс vnxMATRIX</b>\n\n"
@@ -303,14 +281,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         context.user_data['mode'] = 'openclaw_wait'
         markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")]])
-        
         await query.edit_message_text(claw_text, reply_markup=markup, parse_mode='HTML')
         
     # =========================================================
     # ⚙️ ОБЩИЕ ДЕЙСТВИЯ
     # =========================================================
     elif data == "mode_chat_reset":
-        # Кнопка "Вернуться в чат" из аудио-режима
         context.user_data['mode'] = None
         db.create_session(user_id, title="Новый диалог")
         await query.message.reply_text("💬 <b>Текстовый режим восстановлен.</b>", parse_mode='HTML')
@@ -322,6 +298,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
     
-    # Завершаем обработку (убираем часики на кнопке)
+    # 🛑 Завершаем обработку запроса, чтобы убрать часики на кнопке в Telegram
     try: await query.answer()
     except: pass
