@@ -11,6 +11,7 @@ import config
 from loader import sheets_mgr
 from .chat import process_ai_request
 from keyboards.ai_image import get_post_generation_keyboard, get_photo_action_keyboard
+from services.prompt_censor import is_prompt_safe
 
 # Импортируем наш новый движок
 from services.kie_client import kie_studio 
