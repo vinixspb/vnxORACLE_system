@@ -44,6 +44,9 @@ BRAVE_API_KEY_START = os.getenv("BRAVE_API_KEY_START")
 BRAVE_API_KEY_PRO = os.getenv("BRAVE_API_KEY_PRO")
 BRAVE_API_KEY_NEO = os.getenv("BRAVE_API_KEY_NEO")
 
+# ✈️ Ключ для поиска авиабилетов (План Б)
+FLIGHT_API_KEY = os.getenv("FLIGHT_API_KEY")
+
 TEXT_BASE_URL = "https://openrouter.ai/api/v1"
 AI_PROVIDER = "OpenRouter"
 
