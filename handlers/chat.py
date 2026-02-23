@@ -145,14 +145,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             b_key = config.BRAVE_API_KEY_START
 
-        # 🧠 2. Выполняем задачу, передавая ключ агенту
+        # 🧠 2. Выполняем задачу
         if text.lower() in ['статус', 'status', 'ping']:
             ans = await claw_manager.check_status()
         else:
-            # ДОБАВИЛИ передачу brave_key
             ans = await claw_manager.execute_task(text, user_id, update.effective_user.full_name, brave_key=b_key)
             
-        await wait_msg.edit_text(ans, parse_mode='HTML')
+        # 🛡 3. Безопасная отправка ответа (Защита от TimedOut)
+        try:
+            await wait_msg.edit_text(ans, parse_mode='HTML')
+        except Exception as e:
+            logger.warning(f"⚠️ Ошибка редактирования сообщения (Таймаут Telegram): {e}")
+            try:
+                # Если Telegram разорвал соединение, отправляем новым сообщением
+                await update.message.reply_text(ans, parse_mode='HTML')
+            except Exception as e2:
+                logger.error(f"❌ Критический сбой отправки ответа: {e2}")
+                
         return
 
   # 🎨 ПЕРЕХВАТЧИК ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (ШАГ 1: ЗАПРОС ФОРМАТА)
