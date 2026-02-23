@@ -3,6 +3,7 @@ import asyncio
 import os
 import html
 import config  # Используем глобальные настройки
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,6 @@ class OpenClawManager:
             logger.error(f"Status check error: {e}")
             return "⚠️ Ошибка связи с системной шиной."
 
-    # 👇 ДОБАВИЛИ ПАРАМЕТР brave_key
     async def execute_task(self, task_description: str, user_id: int, user_display_name: str = "User", brave_key: str = None):
         """
         Выполнение задачи. 
@@ -34,38 +34,35 @@ class OpenClawManager:
         Для Юзера — режим Read-Only.
         """
         is_admin = (user_id == self.admin_id)
-        
-        # 🧠 Защита от галлюцинаций (даем агенту понимание времени)
-        import datetime
         current_year = datetime.datetime.now().year
         
-        # Формируем контекст безопасности и правила поведения
+        # 🧠 Формируем контекст безопасности и правила анти-SEO
         if not is_admin:
             instruction = (
                 f"SYSTEM RULES for {user_display_name}. CURRENT YEAR: {current_year}. "
-                "1. SEARCH PROTOCOL (CRITICAL): To find information, flights, weather, or news, you MUST use your built-in web search tool (Brave). DO NOT write Python or Bash scripts. DO NOT use curl for web searches. Answer the user directly in Russian. "
-                "2. FILE SYSTEM PROTOCOL: You have READ-ONLY access to the server. "
-                "3. SERVER TASKS ONLY: If the user explicitly asks to write a script for server administration, use `/tmp/` and delete it immediately after execution. "
+                "1. SEARCH PROTOCOL (CRITICAL): Use your built-in web search tool (Brave). DO NOT write Python or Bash scripts for regular searches. Answer in Russian. "
+                "2. DATA EXTRACTION: When searching for flights, hotels, or products, DO NOT quote generic SEO texts or 'from X prices' from aggregators like Aviasales or UniTicket. "
+                "You MUST dig deeper and extract structured data: exact Airline names, exact flight times, flight durations, and specific prices. Format the output clearly as a list. "
+                "3. FILE SYSTEM PROTOCOL: You have READ-ONLY access to the server. "
+                "4. SERVER TASKS: If explicitly asked to write a script for server administration, use `/tmp/` and delete it immediately. "
                 f"USER REQUEST: {task_description}"
             )
         else:
-            # Для тебя — полная свобода действий, но с указанием года
             instruction = f"ADMIN COMMAND from {user_display_name}. CURRENT YEAR: {current_year}. REQUEST: {task_description}"
 
         try:
-# ... ДАЛЬШЕ КОД ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ (env = os.environ.copy() и т.д.) ...
-            # Подготовка окружения (пути к Node.js и OpenClaw)
+            # Подготовка окружения
             env = os.environ.copy()
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/node/bin:" + env.get("PATH", "")
             
-            # 💉 ВПРЫСКИВАЕМ КЛЮЧИ НАПРЯМУЮ ИЗ КОНФИГА И ПАРАМЕТРОВ:
+            # 💉 ВПРЫСКИВАЕМ КЛЮЧИ НАПРЯМУЮ ИЗ КОНФИГА:
             env["OPENROUTER_API_KEY"] = config.KEY_NEO
             
-            # 👇 ПЕРЕДАЕМ КЛЮЧ БРАУЗЕРА (ЕСЛИ ЕСТЬ) В ОКРУЖЕНИЕ АГЕНТА
+            # Передаем ключ браузера
             if brave_key:
                 env["BRAVE_API_KEY"] = brave_key
             
-            # Экранируем только кавычки для bash-команды
+            # Экранируем кавычки
             safe_task = instruction.replace('"', '\\"')
             
             # Запуск агента
@@ -80,20 +77,21 @@ class OpenClawManager:
             
             stdout, stderr = await process.communicate()
             
-            # Собираем вывод и очищаем его для Telegram
+            # Собираем вывод
             raw_result = stdout.decode().strip() or stderr.decode().strip()
             
             if not raw_result:
                 return "🦞 <b>Агент:</b> Задача выполнена в фоновом режиме."
 
-            # Экранируем HTML, чтобы спецсимволы (<, >) не ломали сообщение
+            # Экранируем HTML для безопасности Telegram (чтобы < и > не сломали разметку)
             safe_output = html.escape(raw_result)
             
+            # 🛠 УБРАЛИ ТЕГИ <code>, ТЕПЕРЬ ТЕКСТ НЕ КОПИРУЕТСЯ ПО КЛИКУ, А ССЫЛКИ КЛИКАБЕЛЬНЫ
             return f"🦞 <b>Отчет Агента:</b>\n\n{safe_output}"
             
         except Exception as e:
             logger.error(f"Execution error: {e}")
             return f"⚠️ <b>Критическая ошибка моста:</b>\n<code>{html.escape(str(e))}</code>"
 
-# Глобальный инстанс для использования в хендлерах
+# Глобальный инстанс
 claw_manager = OpenClawManager()
