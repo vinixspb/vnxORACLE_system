@@ -136,21 +136,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wait_msg = await update.message.reply_text("🦞 <i>Агент принял задачу...</i>", parse_mode='HTML')
         from services.openclaw_core import claw_manager
         
+        # 🧠 1. Проверяем тариф и берем соответствующий ключ Brave
+        user_tariff = sheets_mgr.get_user_tariff(user_id)
+        if user_tariff == 'NEO':
+            b_key = config.BRAVE_API_KEY_NEO
+        elif user_tariff == 'PRO':
+            b_key = config.BRAVE_API_KEY_PRO
+        else:
+            b_key = config.BRAVE_API_KEY_START
+
+        # 🧠 2. Выполняем задачу, передавая ключ агенту
         if text.lower() in ['статус', 'status', 'ping']:
             ans = await claw_manager.check_status()
         else:
-            ans = await claw_manager.execute_task(text, user_id, update.effective_user.full_name)
+            # ДОБАВИЛИ передачу brave_key
+            ans = await claw_manager.execute_task(text, user_id, update.effective_user.full_name, brave_key=b_key)
             
         await wait_msg.edit_text(ans, parse_mode='HTML')
-        return
-
-    if mode == 'tts_wait':
-        await handle_tts_request(update, context, text)
-        return
-        
-    if mode == 'sfx_wait':
-        await handle_sfx_request(update, context, text)
-        context.user_data['mode'] = None
         return
 
   # 🎨 ПЕРЕХВАТЧИК ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (ШАГ 1: ЗАПРОС ФОРМАТА)
