@@ -252,6 +252,28 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = 'sfx_wait'
         await query.message.reply_text("🔊 <b>Опишите звук (на английском):</b>", parse_mode='HTML')
 
+    # 🎬 ПЕРЕХВАТЧИК ГЛАВНОГО МЕНЮ "ВИДЕО Ai"
+    if data == "feature_video":
+        context.user_data['mode'] = None # Сбрасываем другие режимы
+        
+        from keyboards.ai_video import get_video_menu_keyboard 
+        
+        menu_text = (
+            "🎬 <b>Модуль Видео Ai (Режиссерская)</b>\n\n"
+            "Выберите способ генерации:\n"
+            "📝 <b>По тексту</b> — Опишите сцену, и нейросеть создаст ролик с нуля.\n"
+            "🖼 <b>По картинке</b> — Нейросеть 'оживит' готовую фотографию."
+        )
+        
+        return await query.edit_message_text(
+            text=menu_text,
+            reply_markup=get_video_menu_keyboard(),
+            parse_mode='HTML'
+        )
+
+
+    
+
     # =========================================================
     # 🦞 OPENCLAW (АВТОНОМНЫЙ ИИ-АГЕНТ)
     # =========================================================
