@@ -1,4 +1,3 @@
-import re
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,3 +27,18 @@ def is_prompt_safe(prompt: str) -> bool:
             return False
             
     return True
+
+def clean_prompt(prompt: str) -> str:
+    """
+    Очищает промпт от системных футеров бота перед отправкой в API.
+    Отрезает всё, начиная с шестеренки ⚙️.
+    """
+    if not prompt:
+        return ""
+    
+    # Ищем шестеренку и отрезаем её вместе со всем текстом после неё
+    if '⚙️' in prompt:
+        prompt = prompt.split('⚙️')[0]
+        
+    # Убираем лишние пробелы и пустые строки по краям
+    return prompt.strip()
