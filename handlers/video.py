@@ -4,8 +4,7 @@ from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 from services.kie_client import kie_studio
 from loader import sheets_mgr
-from services.prompt_censor import is_prompt_safe
-
+from services.prompt_censor import is_prompt_safe, clean_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +30,6 @@ async def handle_video_text_request(update: Update, context: ContextTypes.DEFAUL
     Обработка текстового промпта и запуск рендеринга видео
     """
     user_id = update.effective_user.id
-    async def handle_video_text_request(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str):
-    """
-    Обработка текстового промпта и запуск рендеринга видео
-    """
-    user_id = update.effective_user.id
     context.user_data['mode'] = None # Сбрасываем режим
 
     # 🛑 ФИЛЬТР ЦЕНЗУРЫ (Защита от 18+ и траты ресурсов)
@@ -46,10 +40,8 @@ async def handle_video_text_request(update: Update, context: ContextTypes.DEFAUL
         )
         return # Мгновенно обрываем выполнение!
 
-    # 🛡 Защита: Видео — дорогой процесс, пускаем только PRO и NEO
-    tariff = sheets_mgr.get_user_tariff(user_id)
-# ... дальше идет твой старый код функции ...
-    context.user_data['mode'] = None # Сбрасываем режим
+    # 🧹 ОЧИСТКА ПРОМПТА ОТ СТАРЫХ ФУТЕРОВ
+    safe_api_prompt = clean_prompt(prompt)
 
     # 🛡 Защита: Видео — дорогой процесс, пускаем только PRO и NEO
     tariff = sheets_mgr.get_user_tariff(user_id)
@@ -65,18 +57,23 @@ async def handle_video_text_request(update: Update, context: ContextTypes.DEFAUL
     )
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VIDEO)
 
-    # Запускаем генерацию (По умолчанию будем использовать Kling 3.0 или Grok)
-    # В следующей итерации мы научим kie_client понимать Kling и Hailuo
+    # Запускаем генерацию
     model = "grok-imagine/text-to-video" 
-    video_url = await kie_studio.generate_video(prompt=prompt, model=model)
+    video_url = await kie_studio.generate_video(prompt=safe_api_prompt, model=model)
 
     if video_url:
         try:
+            # 📊 ГЕНЕРИРУЕМ НОВЫЙ ФУТЕР ДЛЯ СТАТИСТИКИ
+            cost_credits = 10 # Пример стоимости генерации видео
+            footer = f"\n\n⚙️ {model} | 🎬 Video Ai | 🎫 {cost_credits} credits"
+            
+            caption_text = f"🎬 <b>Video Ai</b>\nПромпт: <i>{safe_api_prompt[:100]}...</i>{footer}"
+            
             # Отправляем именно как ВИДЕО
             await context.bot.send_video(
                 chat_id=user_id,
                 video=video_url,
-                caption=f"🎬 <b>Video Ai</b>\nМодель: <code>{model}</code>\nПромпт: <i>{prompt[:100]}...</i>",
+                caption=caption_text,
                 parse_mode='HTML'
             )
             await msg.delete()
