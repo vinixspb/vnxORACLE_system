@@ -58,8 +58,13 @@ class OpenClawManager:
             )
 
         try:
+            # Подготовка окружения
             env = os.environ.copy()
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/node/bin:" + env.get("PATH", "")
+            
+            # ⚡️ СУПЕР-СКОРОСТЬ (Оптимизация запуска Node.js)
+            env["NODE_COMPILE_CACHE"] = "/var/tmp/openclaw-compile-cache"
+            env["OPENCLAW_NO_RESPAWN"] = "1"
             
             # 💉 ВПРЫСКИВАЕМ КЛЮЧИ:
             env["OPENROUTER_API_KEY"] = config.KEY_NEO
