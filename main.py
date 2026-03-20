@@ -1,6 +1,5 @@
 import logging
 import config
-from handlers.media import handle_document
 from telegram import BotCommand
 from telegram.ext import (
     Application, 
@@ -59,14 +58,12 @@ def main():
     # 4. Модуль Слуха (Whisper STT) - обработка голосовых
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
-    # 5. Модуль Хранителя (The Vault) - обработка файлов, документов и видео
-    app.add_handler(MessageHandler(filters.Document.ALL | filters.VIDEO, handle_document))
+    # 5. Модуль Хранителя (The Vault) - обработка файлов и документов (УБРАЛИ ВИДЕО)
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
     # 6. Навигационный интерфейс (Inline Buttons)
     app.add_handler(CallbackQueryHandler(handle_callback))
 
-
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     # Запуск бесконечного цикла (Polling)
     logger.info("👁 vnxORACLE: ONLINE")
     app.run_polling()
