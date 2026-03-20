@@ -41,23 +41,24 @@ class KieClient:
         elif "midjourney" in model_lower or "mj" in model_lower: model_family = "midjourney" # <-- Добавили Midjourney
 
         # 🧠 2. ИДЕАЛЬНАЯ МАТРИЦА (со всеми моделями)
+        
         config_matrix = {
             "vertical": {
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "gpt": {"image_size": "9:16", "output_format": "png"},
+                "gpt": {"aspect_ratio": "9:16", "output_format": "png"}, # <-- Исправили
                 "grok": {"aspect_ratio": "9:16"},
-                "qwen": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30, "guidance_scale": 2.5, "enable_safety_checker": True},
-                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"}, # Профиль для Nano Banana
+                "qwen": {"aspect_ratio": "9:16", "output_format": "png", "num_inference_steps": 30},
+                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"},
                 "midjourney": {"aspect_ratio": "9:16"},
                 "default": {"aspect_ratio": "9:16"}
             },
             "horizontal": {
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "gpt": {"image_size": "16:9", "output_format": "png"},
+                "gpt": {"aspect_ratio": "16:9", "output_format": "png"}, # <-- Исправили
                 "grok": {"aspect_ratio": "16:9"},
-                "qwen": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30, "guidance_scale": 2.5, "enable_safety_checker": True},
+                "qwen": {"aspect_ratio": "16:9", "output_format": "png", "num_inference_steps": 30},
                 "sd3": {"aspect_ratio": "16:9", "output_format": "jpeg"},
                 "midjourney": {"aspect_ratio": "16:9"},
                 "default": {"aspect_ratio": "16:9"}
@@ -65,9 +66,9 @@ class KieClient:
             "square": {
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "gpt": {"image_size": "1:1", "output_format": "png"},
+                "gpt": {"aspect_ratio": "1:1", "output_format": "png"}, # <-- Исправили
                 "grok": {"aspect_ratio": "1:1"},
-                "qwen": {"image_size": "square", "output_format": "png", "num_inference_steps": 30, "guidance_scale": 2.5, "enable_safety_checker": True},
+                "qwen": {"aspect_ratio": "1:1", "output_format": "png", "num_inference_steps": 30},
                 "sd3": {"aspect_ratio": "1:1", "output_format": "jpeg"},
                 "midjourney": {"aspect_ratio": "1:1"},
                 "default": {"aspect_ratio": "1:1"}
