@@ -1,7 +1,7 @@
 import logging
-import os  # 👈 Добавил жизненно важный импорт для работы с файлами фото!
+import os  # 👈 Жизненно важный импорт для фото!
 import config
-import config_models  # Наш реестр моделей
+import config_models  # Реестр моделей
 from loader import sheets_mgr, db, USER_MODELS
 import keyboards
 from handlers.video import ask_video_prompt
@@ -26,8 +26,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await ask_video_prompt(update, context, "image")
 
     elif data == "feature_video":
-        context.user_data['mode'] = None # Сбрасываем другие режимы
-        
+        context.user_data['mode'] = None 
         from keyboards.ai_video import get_video_menu_keyboard 
         
         menu_text = (
@@ -47,7 +46,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 👤 ПРОФИЛЬ, ТАРИФЫ И ОПЛАТА
     # =========================================================
     elif data == "profile_tariffs":
-        # Собираем красивый текст о тарифах из конфига
         tariffs_text = "\n\n".join(config.TARIFF_INFO.values())
         await query.edit_message_text(
             f"{tariffs_text}\n\n👇 <b>Выберите тариф для подключения:</b>",
@@ -56,7 +54,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     elif data == "profile_support":
-        # Показываем контакты поддержки
         await query.edit_message_text(
             config.MSG_SUPPORT,
             parse_mode='HTML',
@@ -64,11 +61,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data == "back_to_profile":
-        # Возвращаемся в профиль (используем функцию из admin.py)
         await show_profile(update, user_id)
 
     elif data.startswith("buy_"):
-        # Обработка нажатия "Купить"
         plan = data.split("_")[1]
         await query.edit_message_text(
             f"💳 <b>Оплата тарифа {plan}</b>\n\n{config.PAYMENT_INFO}",
@@ -85,12 +80,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_reply_markup(reply_markup=keyboards.get_history_keyboard(user_id, mode="view"))
 
     elif data.startswith("del_"):
-        # Удаление сессии
         session_id = int(data.split("_")[1])
         db.delete_session(user_id, session_id)
         await query.answer("🗑 Диалог удален")
         
-        # Обновляем список или пишем, что пусто
         markup = keyboards.get_history_keyboard(user_id, mode="delete")
         if markup:
             await query.edit_message_reply_markup(reply_markup=markup)
@@ -98,7 +91,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("📂 Архив пуст.", reply_markup=keyboards.get_features_keyboard())
 
     elif data.startswith("session_"):
-        # Восстановление сессии
         session_id = int(data.split("_")[1])
         db.activate_session(user_id, session_id)
         await query.message.reply_text("📂 <b>Диалог восстановлен.</b>\nЯ помню контекст этой беседы.", parse_mode='HTML')
@@ -109,7 +101,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "feature_text":
         context.user_data['mode'] = None
         curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
-        # Показываем меню, адаптированное под тариф юзера
         await query.edit_message_text(
             "💡 <b>ВЫБОР НЕЙРОСЕТИ:</b>",
             reply_markup=keyboards.get_models_keyboard(user_id, curr),
@@ -119,7 +110,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("setmodel_"):
         new_model = data.split("setmodel_")[1]
         
-        # --- ПРОВЕРКА ПРАВ (через реестр) ---
         user_tariff = sheets_mgr.get_user_tariff(user_id)
         if not config_models.is_model_allowed(user_tariff, new_model):
             await query.answer("⛔️ Модель недоступна на вашем тарифе!", show_alert=True)
@@ -130,7 +120,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await query.message.delete()
         except: pass
         
-        # --- ПОИСК ИМЕНИ (через реестр) ---
         all_models = config_models.MODELS_START + config_models.MODELS_PRO + config_models.MODELS_NEO
         model_name = next((name for name, code in all_models if code == new_model), new_model)
         
@@ -145,12 +134,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =========================================================
     elif data == "feature_design":
         context.user_data['mode'] = None
-        curr_img = context.user_data.get('img_model', config.DEFAULT_IMG_MODEL)
+        # Ставим бесплатную Pollinations по умолчанию, если юзер еще ничего не выбирал
+        curr_img = context.user_data.get('img_model', config.IMG_POLLINATIONS)
         
         try:
             from keyboards.ai_image import get_image_models_keyboard
             markup = get_image_models_keyboard(user_id, curr_img)
-            text = "🎨 <b>СТУДИЯ ДИЗАЙНА</b>\n\nВыберите нейросеть для генерации:"
+            
+            # 🔥 КРАСИВЫЙ ПРОДАЮЩИЙ ТЕКСТ ДЛЯ ЮЗЕРОВ
+            text = (
+                "🎨 <b>СТУДИЯ ДИЗАЙНА vnxORACLE</b>\n\n"
+                "Я могу нарисовать всё, что вы представите. Выберите "
+                "нейросеть, которая лучше всего подходит под вашу задачу:\n\n"
+                "⚡️ <b>Flux Pro</b> — Идеально понимает сложные запросы, пишет текст на картинках и делает логотипы.\n"
+                "🍌 <b>Nano Banana</b> — Создает сочные, яркие и невероятно креативные арты и иллюстрации.\n"
+                "🌌 <b>Seedream</b> — Лучший выбор для волшебных миров, фэнтези и мягкого освещения.\n"
+                "🆓 <b>Pollinations</b> — Простая и сверхбыстрая модель без ограничений.\n\n"
+                "👇 <i>Нажмите на кнопку, чтобы выбрать:</i>"
+            )
         except ImportError:
             markup = keyboards.get_features_keyboard()
             text = "🛠 Модуль изображений в процессе настройки..."
@@ -167,12 +168,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await context.bot.send_message(
             chat_id=user_id,
-            text=f"🎨 <b>Модель выбрана!</b>\nРежим: <code>{new_model}</code>\n\n👇 Опишите, что вы хотите увидеть:",
+            text=f"🎨 <b>Модель выбрана!</b>\n\n👇 Опишите, что вы хотите увидеть (чем подробнее, тем лучше):",
             parse_mode='HTML'
         )
 
     # =========================================================
-    # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО (УМНЫЙ ПЕРЕХВАТ)
+    # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО
     # =========================================================
     elif data == "photo_vision":
         path = context.user_data.get('last_photo_path')
@@ -298,6 +299,5 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
     
-    # 🛑 Завершаем обработку запроса, чтобы убрать часики на кнопке в Telegram
     try: await query.answer()
     except: pass
