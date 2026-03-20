@@ -155,13 +155,15 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         msg = await update.message.reply_text(f"🦞 <i>Скачал файл {safe_name}. Агент приступил к анализу...</i>", parse_mode='HTML')
         
-        # СЕКРЕТНАЯ ИНЪЕКЦИЯ (Магия здесь!)
+       # СЕКРЕТНАЯ ИНЪЕКЦИЯ С ЗАЩИТОЙ ОТ ПЕРЕПОЛНЕНИЯ
         injected_prompt = (
             f"{caption}\n\n"
             f"[SYSTEM COMMAND: Пользователь только что загрузил файл.\n"
             f"Имя: {document.file_name}\n"
             f"Абсолютный путь: {path}\n"
-            f"Используй инструменты (bash, python, pdf), чтобы открыть этот путь напрямую. Не ищи его в workspace!]"
+            f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль (не используй cat или вывод всего текста). "
+            f"Если это таблица (Excel/CSV/JSON) или большой документ, напиши и выполни Python-скрипт (например, с использованием pandas), "
+            f"чтобы проанализировать данные локально, и выведи пользователю ТОЛЬКО готовый ответ, аналитику или запрошенную сумму!]"
         )
         
         response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
