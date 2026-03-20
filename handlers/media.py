@@ -20,21 +20,22 @@ if not os.path.exists(DOWNLOADS_DIR):
 
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "vertical"):
     """
-    Умная генерация изображений (KIE AI + Fallback Pollinations)
+    БРОНЕБОЙНАЯ ГЕНЕРАЦИЯ (KIE AI + Автоматический Fallback на Pollinations при ошибке)
     """
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
     
-    img_model = context.user_data.get('img_model', config.DEFAULT_IMG_MODEL)
-    safe_prompt = clean_prompt(prompt) # Очищаем от старых футеров
+    img_model = context.user_data.get('img_model', config.IMG_POLLINATIONS)
+    safe_prompt = clean_prompt(prompt) # Очищаем промпт
     
-    # --- 1. ЕСЛИ ВЫБРАН БЕСПЛАТНЫЙ POLLINATIONS ---
-    if img_model == "pollinations":
+    # --- Функция-помощник для генерации через Pollinations ---
+    async def generate_pollinations_fallback(reason_text: str):
+        logger.warning(f"⚠️ Fallback to Pollinations for user {user_id}. Reason: {reason_text}")
         if ratio == "vertical": w, h = 576, 1024
         elif ratio == "horizontal": w, h = 1024, 576
         else: w, h = 1024, 1024
             
-        enhanced_prompt = f"{safe_prompt}, highly detailed, 8k, cinematic lighting"
+        enhanced_prompt = f"{safe_prompt}, highly detailed, 8k, drawing, cinematic lighting"
         seed = random.randint(1, 999999)
         image_url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
         
@@ -42,22 +43,26 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             await context.bot.send_photo(
                 chat_id=user_id,
                 photo=image_url, 
-                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Free)</code>\nRatio: {ratio}\nPrompt: {safe_prompt}", 
+                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Fallback)</code>\nPrompt: {safe_prompt}\n\n⚠️ <i>Основная нейросеть (Nano Banana) временно недоступна, использован резерв.</i>", 
                 reply_markup=get_post_generation_keyboard(),
                 parse_mode='HTML'
             )
         except Exception as e:
-            logger.error(f"Pollinations Error: {e}")
-            await context.bot.send_message(chat_id=user_id, text="⚠️ Ошибка визуализации.")
-        return
+            logger.error(f"Pollinations Fallback Error: {e}")
+            await context.bot.send_message(chat_id=user_id, text="⚠️ Критическая ошибка визуализации.")
 
-    # --- 2. ЕСЛИ ВЫБРАНА МОДЕЛЬ ЧЕРЕЗ KIE.AI ---
+    # --- 1. ЕСЛИ ВЫБРАН БЕСПЛАТНЫЙ POLLINATIONS НАПРЯМУЮ ---
+    if img_model == config.IMG_POLLINATIONS:
+        return await generate_pollinations_fallback("User selected free model")
+
+    # --- 2. ЕСЛИ ВЫБРАНА МОДЕЛЬ ЧЕРЕЗ KIE.AI (Flux, Nano Banana и тд) ---
     msg = await context.bot.send_message(
         chat_id=user_id, 
         text="⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", 
         parse_mode='HTML'
     )
     
+    # Пытаемся сгенерировать через KIE
     result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio)
     
     if result_url:
@@ -74,8 +79,9 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             logger.error(f"Telegram Photo Send Error: {e}")
             await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
     else:
-        await msg.edit_text("❌ <b>Сбой генерации.</b>\nНейросеть отклонила запрос или произошла ошибка тайм-аута.", parse_mode='HTML')
-
+        # 🔥 ВОТ ОН, FALLBACK! Если KIE выдал None (ошибку 500), запускаем Pollinations
+        await msg.delete() # Удаляем сообщение "Инициализация"
+        await generate_pollinations_fallback(f"KIE Error 500 with model {img_model}")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
