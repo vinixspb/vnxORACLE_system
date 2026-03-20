@@ -40,36 +40,35 @@ class KieClient:
         elif "sd3" in model_lower or "stabilityai" in model_lower: model_family = "sd3" # <-- Добавили Nano Banana
         elif "midjourney" in model_lower or "mj" in model_lower: model_family = "midjourney" # <-- Добавили Midjourney
 
-        # 🧠 2. ИДЕАЛЬНАЯ МАТРИЦА (со всеми моделями)
-        
+        # 🧠 2. ИДЕАЛЬНАЯ МАТРИЦА (со всеми моделями - Отредактировано под KIE Spec)
         config_matrix = {
             "vertical": {
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "gpt": {"aspect_ratio": "9:16", "output_format": "png"}, # <-- Исправили
+                "gpt": {"aspect_ratio": "9:16", "output_format": "png"},
                 "grok": {"aspect_ratio": "9:16"},
-                "qwen": {"aspect_ratio": "9:16", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"},
+                "qwen": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30},
+                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"}, # <-- Явно 9:16
                 "midjourney": {"aspect_ratio": "9:16"},
                 "default": {"aspect_ratio": "9:16"}
             },
             "horizontal": {
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "gpt": {"aspect_ratio": "16:9", "output_format": "png"}, # <-- Исправили
+                "gpt": {"aspect_ratio": "16:9", "output_format": "png"},
                 "grok": {"aspect_ratio": "16:9"},
-                "qwen": {"aspect_ratio": "16:9", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "16:9", "output_format": "jpeg"},
+                "qwen": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30},
+                "sd3": {"aspect_ratio": "16:9", "output_format": "jpeg"}, # <-- Явно 16:9
                 "midjourney": {"aspect_ratio": "16:9"},
                 "default": {"aspect_ratio": "16:9"}
             },
             "square": {
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "gpt": {"aspect_ratio": "1:1", "output_format": "png"}, # <-- Исправили
+                "gpt": {"aspect_ratio": "1:1", "output_format": "png"},
                 "grok": {"aspect_ratio": "1:1"},
-                "qwen": {"aspect_ratio": "1:1", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "1:1", "output_format": "jpeg"},
+                "qwen": {"image_size": "square", "output_format": "png", "num_inference_steps": 30},
+                "sd3": {"aspect_ratio": "1:1", "output_format": "jpeg"}, # <-- Явно 1:1
                 "midjourney": {"aspect_ratio": "1:1"},
                 "default": {"aspect_ratio": "1:1"}
             }
