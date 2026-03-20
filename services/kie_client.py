@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class KieClient:
     def __init__(self):
         self.api_key = config.KIE_API_KEY
-        self.base_url = "https://api.kie.ai/api/v1"
+        self.base_url = "[https://api.kie.ai/api/v1](https://api.kie.ai/api/v1)"
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -37,6 +37,8 @@ class KieClient:
         elif "gpt" in model_lower or "dall" in model_lower: model_family = "gpt"
         elif "grok" in model_lower: model_family = "grok"
         elif "qwen" in model_lower: model_family = "qwen"
+        elif "sd3" in model_lower or "stabilityai" in model_lower: model_family = "sd3" # <-- Добавили Nano Banana
+        elif "midjourney" in model_lower or "mj" in model_lower: model_family = "midjourney" # <-- Добавили Midjourney
 
         # 🧠 2. ИДЕАЛЬНАЯ МАТРИЦА (со всеми моделями)
         config_matrix = {
@@ -46,6 +48,8 @@ class KieClient:
                 "gpt": {"image_size": "9:16", "output_format": "png"},
                 "grok": {"aspect_ratio": "9:16"},
                 "qwen": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30, "guidance_scale": 2.5, "enable_safety_checker": True},
+                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"}, # Профиль для Nano Banana
+                "midjourney": {"aspect_ratio": "9:16"},
                 "default": {"aspect_ratio": "9:16"}
             },
             "horizontal": {
@@ -54,6 +58,8 @@ class KieClient:
                 "gpt": {"image_size": "16:9", "output_format": "png"},
                 "grok": {"aspect_ratio": "16:9"},
                 "qwen": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30, "guidance_scale": 2.5, "enable_safety_checker": True},
+                "sd3": {"aspect_ratio": "16:9", "output_format": "jpeg"},
+                "midjourney": {"aspect_ratio": "16:9"},
                 "default": {"aspect_ratio": "16:9"}
             },
             "square": {
@@ -62,13 +68,15 @@ class KieClient:
                 "gpt": {"image_size": "1:1", "output_format": "png"},
                 "grok": {"aspect_ratio": "1:1"},
                 "qwen": {"image_size": "square", "output_format": "png", "num_inference_steps": 30, "guidance_scale": 2.5, "enable_safety_checker": True},
+                "sd3": {"aspect_ratio": "1:1", "output_format": "jpeg"},
+                "midjourney": {"aspect_ratio": "1:1"},
                 "default": {"aspect_ratio": "1:1"}
             }
         }
 
         # Безопасное извлечение
         safe_ratio = ratio if ratio in config_matrix else "vertical"
-        params = config_matrix[safe_ratio][model_family]
+        params = config_matrix[safe_ratio].get(model_family, config_matrix[safe_ratio]["default"])
 
         # 🧠 3. Собираем идеальный payload
         input_data = {"prompt": prompt, "num_images": 1}
@@ -84,7 +92,8 @@ class KieClient:
                 async with session.post(create_url, json=payload) as resp:
                     data = await resp.json()
                     if data.get("code") != 200:
-                        logger.error(f"❌ KIE Create Task Error: {data}")
+                        # 🔥 Расширенное логирование: теперь мы видим, из-за чего ошибка 500!
+                        logger.error(f"❌ KIE Create Task Error: {data} | Sent Payload: {payload}")
                         return None, None
                     
                     task_id = data.get("data", {}).get("taskId")
@@ -116,7 +125,6 @@ class KieClient:
                                 parsed_result = json.loads(result_json_str)
                                 image_url = parsed_result.get("resultUrls", [None])[0]
                                 logger.info(f"🎨 KIE Task Completed! URL: {image_url}")
-                                # Возвращаем и URL, и ID задачи (для Upscale)
                                 return image_url, task_id
                             except json.JSONDecodeError:
                                 return None, None
@@ -132,10 +140,6 @@ class KieClient:
     # 🎬 ГЕНЕРАЦИЯ ВИДЕО
     # ==========================================
     async def generate_video(self, prompt: str, model: str, ratio: str = "vertical") -> str:
-        """
-        Асинхронная генерация ВИДЕО через Grok или другие видео-модели.
-        Возвращает url видео.
-        """
         if not self.api_key: return None
         create_url = f"{self.base_url}/jobs/createTask"
         
@@ -165,6 +169,8 @@ class KieClient:
                     if data.get("code") == 200:
                         task_id = data.get("data", {}).get("taskId")
                         logger.info(f"✅ KIE Video Task Created: {task_id}")
+                    else:
+                        logger.error(f"❌ KIE Video Task Error: {data} | Payload: {payload}")
             except Exception as e:
                 logger.error(f"❌ KIE Network Error (Video): {e}")
                 return None
@@ -172,7 +178,7 @@ class KieClient:
         if not task_id: return None
 
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
-        max_attempts = 100 # Видео генерируется дольше, ждем до 5 минут
+        max_attempts = 100 
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(max_attempts):
@@ -202,9 +208,6 @@ class KieClient:
     # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (UPSCALE)
     # ==========================================
     async def upscale_image(self, original_task_id: str) -> str:
-        """
-        Апскейл изображения по ID оригинальной задачи.
-        """
         if not self.api_key: return None
         create_url = f"{self.base_url}/jobs/createTask"
         
@@ -253,5 +256,4 @@ class KieClient:
                     continue 
         return None
 
-# Экспортируем готовый объект клиента
 kie_studio = KieClient()
