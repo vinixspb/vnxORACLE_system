@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class KieClient:
     def __init__(self):
         self.api_key = config.KIE_API_KEY
-        self.base_url = "[https://api.kie.ai/api/v1](https://api.kie.ai/api/v1)"
+        self.base_url = "[https://api.kie.ai/api/v1](https://api.kie.ai/api/v1)" # <-- ВОТ ЗДЕСЬ ОШИБКА
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
