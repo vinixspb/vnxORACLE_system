@@ -1,5 +1,6 @@
 import logging
 import config
+from handlers.media import handle_document
 from telegram import BotCommand
 from telegram.ext import (
     Application, 
@@ -64,6 +65,8 @@ def main():
     # 6. Навигационный интерфейс (Inline Buttons)
     app.add_handler(CallbackQueryHandler(handle_callback))
 
+
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     # Запуск бесконечного цикла (Polling)
     logger.info("👁 vnxORACLE: ONLINE")
     app.run_polling()
