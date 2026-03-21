@@ -15,30 +15,24 @@ class KieClient:
             "Content-Type": "application/json"
         }
 
-    # ==========================================
-    # 🖼 ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ
-    # ==========================================
     async def generate_image(self, prompt: str, model: str, ratio: str = "vertical") -> tuple:
-        """
-        Асинхронная генерация изображений.
-        Возвращает кортеж (image_url, task_id)
-        """
+        """Асинхронная генерация изображений. Возвращает (image_url, task_id)"""
         if not self.api_key:
             logger.error("❌ KIE Client: KIE_API_KEY is missing.")
             return None, None
 
         create_url = f"{self.base_url}/jobs/createTask"
         
-        # 🧠 1. Определяем семейство нейросети
+        # Определяем семейство модели
         model_family = "default"
         model_lower = model.lower()
         
-        if "nano-banana" in model_lower or "nano_banana" in model_lower:
+        if "nano-banana" in model_lower:
             model_family = "nano_banana"
-        elif "gpt-4o-image" in model_lower or "gpt4o-image" in model_lower:
-            model_family = "gpt_4o"  # 🔥 НОВЫЙ API
-        elif "gpt-image" in model_lower:
-            model_family = "gpt_legacy"  # Старая GPT модель
+        elif "qwen-image" in model_lower or "qwen_image" in model_lower:
+            model_family = "qwen_image"  # 🆕 Qwen 2.0
+        elif "gpt-4o-image" in model_lower:
+            model_family = "gpt_4o"
         elif "flux" in model_lower:
             model_family = "flux"
         elif "seedream" in model_lower:
@@ -46,12 +40,12 @@ class KieClient:
         elif "grok" in model_lower:
             model_family = "grok"
 
-        # 🧠 2. МАТРИЦА ПАРАМЕТРОВ (с учетом ограничений KIE API)
+        # МАТРИЦА ПАРАМЕТРОВ
         config_matrix = {
             "vertical": {
                 "nano_banana": {"aspect_ratio": "9:16", "resolution": "1K", "output_format": "png"},
-                "gpt_4o": {},  # 🔥 GPT-4o использует свой API (не нужны параметры)
-                "gpt_legacy": {"aspect_ratio": "2:3", "quality": "medium"},  # Старая GPT
+                "qwen_image": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30},  # 🆕
+                "gpt_4o": {},  # GPT-4o использует свой API
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "grok": {"aspect_ratio": "9:16"},
@@ -59,8 +53,8 @@ class KieClient:
             },
             "horizontal": {
                 "nano_banana": {"aspect_ratio": "16:9", "resolution": "1K", "output_format": "png"},
+                "qwen_image": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30},  # 🆕
                 "gpt_4o": {},
-                "gpt_legacy": {"aspect_ratio": "3:2", "quality": "medium"},
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "grok": {"aspect_ratio": "16:9"},
@@ -68,8 +62,8 @@ class KieClient:
             },
             "square": {
                 "nano_banana": {"aspect_ratio": "1:1", "resolution": "1K", "output_format": "png"},
+                "qwen_image": {"image_size": "square", "output_format": "png", "num_inference_steps": 30},  # 🆕
                 "gpt_4o": {},
-                "gpt_legacy": {"aspect_ratio": "1:1", "quality": "medium"},
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "grok": {"aspect_ratio": "1:1"},
@@ -77,11 +71,10 @@ class KieClient:
             }
         }
 
-        # Безопасное извлечение
         safe_ratio = ratio if ratio in config_matrix else "vertical"
         params = config_matrix[safe_ratio].get(model_family, config_matrix[safe_ratio]["default"])
 
-        # 🧠 3. Собираем payload
+        # Собираем payload
         input_data = {"prompt": prompt, "num_images": 1}
         for key, value in params.items():
             input_data[key] = value
@@ -89,20 +82,17 @@ class KieClient:
         payload = {"model": model, "input": input_data}
         task_id = None
         
-        # --- Отправка задачи ---
+        # Отправка задачи
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
                 async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     data = await resp.json()
                     if data.get("code") != 200:
-                        logger.error(f"❌ KIE Create Task Error: {data} | Sent Payload: {payload}")
+                        logger.error(f"❌ KIE Create Task Error: {data} | Payload: {payload}")
                         return None, None
                     
                     task_id = data.get("data", {}).get("taskId")
-                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model}, Ratio: {ratio})")
-            except asyncio.TimeoutError:
-                logger.error(f"❌ KIE Timeout: API не ответил за 30 секунд")
-                return None, None
+                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model})")
             except Exception as e:
                 logger.error(f"❌ KIE Network Error: {e}")
                 return None, None
@@ -110,7 +100,7 @@ class KieClient:
         if not task_id:
             return None, None
 
-        # --- Ожидание результата ---
+        # Ожидание результата
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
         max_attempts = 60
         
@@ -131,29 +121,21 @@ class KieClient:
                             try:
                                 parsed_result = json.loads(result_json_str)
                                 image_url = parsed_result.get("resultUrls", [None])[0]
-                                logger.info(f"🎨 KIE Task Completed! URL: {image_url}")
+                                logger.info(f"🎨 KIE Image Complete! URL: {image_url}")
                                 return image_url, task_id
                             except json.JSONDecodeError:
-                                logger.error(f"❌ KIE JSON Parse Error")
                                 return None, None
                         elif state == "fail":
-                            fail_msg = task_info.get('failMsg', 'Unknown')
-                            logger.error(f"❌ KIE Task Failed: {fail_msg}")
+                            logger.error(f"❌ KIE Task Failed: {task_info.get('failMsg')}")
                             return None, None
-                except asyncio.TimeoutError:
-                    logger.warning(f"⚠️ KIE Query Timeout (attempt {attempt+1}/{max_attempts})")
-                    continue
-                except Exception as e:
-                    logger.warning(f"⚠️ KIE Query Error (attempt {attempt+1}): {e}")
+                except Exception:
                     continue
 
-        logger.error(f"❌ KIE Task Timeout: задача не завершилась за {max_attempts * 3} секунд")
+        logger.error(f"❌ KIE Task Timeout")
         return None, None
 
-    # ==========================================
-    # 🎬 ГЕНЕРАЦИЯ ВИДЕО
-    # ==========================================
     async def generate_video(self, prompt: str, model: str, ratio: str = "vertical") -> str:
+        """Генерация видео через KIE (Kling 3.0 / Grok Video)"""
         if not self.api_key:
             return None
             
@@ -185,20 +167,17 @@ class KieClient:
                     if data.get("code") == 200:
                         task_id = data.get("data", {}).get("taskId")
                         logger.info(f"✅ KIE Video Task Created: {task_id}")
-                    else:
-                        logger.error(f"❌ KIE Video Task Error: {data} | Payload: {payload}")
             except Exception as e:
-                logger.error(f"❌ KIE Network Error (Video): {e}")
+                logger.error(f"❌ KIE Video Error: {e}")
                 return None
 
         if not task_id:
             return None
 
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
-        max_attempts = 100
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
-            for attempt in range(max_attempts):
+            for attempt in range(100):
                 await asyncio.sleep(3)
                 try:
                     async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
@@ -212,72 +191,14 @@ class KieClient:
                             try:
                                 parsed = json.loads(result_json_str)
                                 video_url = parsed.get("resultUrls", [None])[0]
-                                logger.info(f"🎬 KIE Video Task Completed! URL: {video_url}")
+                                logger.info(f"🎬 KIE Video Complete! URL: {video_url}")
                                 return video_url
-                            except json.JSONDecodeError:
+                            except:
                                 return None
                         elif state == "fail":
                             return None
-                except Exception:
+                except:
                     continue
-                    
-        return None
-
-    # ==========================================
-    # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (UPSCALE)
-    # ==========================================
-    async def upscale_image(self, original_task_id: str) -> str:
-        if not self.api_key:
-            return None
-            
-        create_url = f"{self.base_url}/jobs/createTask"
-        
-        payload = {
-            "model": "grok-imagine/upscale",
-            "input": {"task_id": original_task_id}
-        }
-
-        task_id = None
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            try:
-                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    data = await resp.json()
-                    if data.get("code") == 200:
-                        task_id = data.get("data", {}).get("taskId")
-                        logger.info(f"✅ KIE Upscale Task Created: {task_id}")
-            except Exception as e:
-                logger.error(f"❌ KIE Network Error (Upscale): {e}")
-                return None
-
-        if not task_id:
-            return None
-
-        query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
-        
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            for attempt in range(60):
-                await asyncio.sleep(3)
-                try:
-                    async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        result_data = await resp.json()
-                        if result_data.get("code") != 200:
-                            continue
-                            
-                        state = result_data.get("data", {}).get("state")
-                        if state == "success":
-                            result_json_str = result_data.get("data", {}).get("resultJson", "{}")
-                            try:
-                                parsed = json.loads(result_json_str)
-                                upscaled_url = parsed.get("resultUrls", [None])[0]
-                                logger.info(f"✨ KIE Upscale Task Completed! URL: {upscaled_url}")
-                                return upscaled_url
-                            except json.JSONDecodeError:
-                                return None
-                        elif state == "fail":
-                            return None
-                except Exception:
-                    continue
-                    
         return None
 
 kie_studio = KieClient()
