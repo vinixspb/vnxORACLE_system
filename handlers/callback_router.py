@@ -172,39 +172,57 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
 
-    # =========================================================
-    # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО
-    # =========================================================
-    elif data == "photo_vision":
-        path = context.user_data.get('last_photo_path')
-        caption = context.user_data.get('last_photo_caption') or "Что на этом фото подробно?"
+   # =========================================================
+   # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО
+   # =========================================================
+   elif data == "photo_vision":
+    path = context.user_data.get('last_photo_path')
+    caption = context.user_data.get('last_photo_caption') or "Что на этом фото подробно?"
 
-        if not path or not os.path.exists(path):
-            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
-            return
+    if not path or not os.path.exists(path):
+        await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+        return
 
-        await query.message.delete()
-        from handlers.chat import process_ai_request
-        await process_ai_request(update, context, caption, image_path=path)
+    await query.message.delete()
+    from handlers.chat import process_ai_request
+    await process_ai_request(update, context, caption, image_path=path)
 
-    elif data == "photo_edit":
-        path = context.user_data.get('last_photo_path')
-        caption = context.user_data.get('last_photo_caption')
+   elif data == "photo_edit":
+    path = context.user_data.get('last_photo_path')
+    caption = context.user_data.get('last_photo_caption')
 
-        if not path or not os.path.exists(path):
-            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
-            return
+    if not path or not os.path.exists(path):
+        await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+        return
 
-        if not caption:
-            context.user_data['mode'] = 'img2img_wait'
-            await query.message.edit_text(
-                "🪄 <b>Режим редактирования</b>\n\nНапишите текстом, что именно нужно изменить или добавить на этом фото:", 
-                parse_mode='HTML'
-            )
-            return
+    # 🔥 ВКЛЮЧАЕМ РЕЖИМ IMG2IMG
+    context.user_data['mode'] = 'img2img_wait'
+    context.user_data['img2img_source_path'] = path  # Сохраняем путь к исходному фото
+    
+    await query.message.edit_text(
+        "🪄 <b>Режим редактирования активирован!</b>\n\n"
+        "Напишите, что нужно изменить на фото.\n\n"
+        "Примеры:\n"
+        "• 'Сделай небо синим'\n"
+        "• 'Добавь радугу'\n"
+        "• 'Измени цвет машины на красный'\n\n"
+        "💡 <i>Для выхода напишите 'отмена'</i>",
+        parse_mode='HTML'
+    )
 
-        await query.message.delete()
-        await query.message.reply_text("⏳ <i>Инициализация модуля Img2Img... (Интеграция с API в процессе)</i>", parse_mode='HTML')
+   elif data == "photo_upscale":
+    path = context.user_data.get('last_photo_path')
+    
+    if not path or not os.path.exists(path):
+        await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+        return
+    
+    await query.message.delete()
+    await query.message.reply_text(
+        "✨ <b>Улучшение качества...</b>\n"
+        "<i>Модуль Upscale в разработке. Скоро будет доступен!</i>",
+        parse_mode='HTML'
+    )
 
     # =========================================================
     # 📐 ВЫБОР ФОРМАТА ИЗОБРАЖЕНИЯ И ЗАПУСК ГЕНЕРАЦИИ
