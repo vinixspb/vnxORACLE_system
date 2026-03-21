@@ -24,12 +24,22 @@ if not os.path.exists(DOWNLOADS_DIR):
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "vertical"):
     """
     БРОНЕБОЙНАЯ ГЕНЕРАЦИЯ (KIE AI + Автоматический Fallback на Pollinations)
+    Поддерживает Text2Img и Img2Img
     """
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
     
     img_model = context.user_data.get('img_model', config.IMG_POLLINATIONS)
     safe_prompt = clean_prompt(prompt)
+    
+    # 🔥 ПРОВЕРЯЕМ РЕЖИМ IMG2IMG
+    is_img2img = context.user_data.get('img2img_mode', False)
+    source_image_path = context.user_data.get('img2img_source_path') if is_img2img else None
+    
+    # Сбрасываем флаг после использования
+    if is_img2img:
+        context.user_data['img2img_mode'] = False
+        logger.info(f"🪄 Img2Img mode: editing {source_image_path}")
     
     # --- Функция-помощник: Pollinations Fallback ---
     async def generate_pollinations_fallback(reason_text: str):
@@ -92,7 +102,13 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         parse_mode='HTML'
     )
     
-    result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio)
+    # 🔥 ПЕРЕДАЕМ ИСХОДНОЕ ФОТО ДЛЯ IMG2IMG (если есть)
+    result_url, task_id = await kie_studio.generate_image(
+        safe_prompt, 
+        img_model, 
+        ratio,
+        source_image=source_image_path  # ← НОВЫЙ ПАРАМЕТР
+    )
     
     if result_url:
         try:
@@ -111,11 +127,13 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                         context.user_data['vision_mode'] = True
                         
                         # Отправляем фото из файла
+                        mode_text = "🪄 Img2Img редактирование" if is_img2img else "🎨 Text2Img генерация"
+                        
                         with open(save_path, 'rb') as photo_file:
                             await context.bot.send_photo(
                                 chat_id=user_id,
                                 photo=photo_file,
-                                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\n\n💡 <i>Vision активирован — можете попросить изменить что-то на картинке!</i>\n\nPrompt: {safe_prompt}", 
+                                caption=f"✅ <b>{mode_text} завершена!</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\n\n💡 <i>Vision активирован — можете попросить изменить что-то на картинке!</i>\n\nPrompt: {safe_prompt}", 
                                 reply_markup=get_post_generation_keyboard(),
                                 parse_mode='HTML'
                             )
@@ -180,7 +198,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если есть подпись — сразу обрабатываем как запрос
     if caption:
         logger.info(f"👁 Auto Vision: анализ с подписью '{caption}'")
-        from .chat import process_ai_request
         await process_ai_request(update, context, caption, image_path=path)
     else:
         # Если подписи нет — показываем кнопки
