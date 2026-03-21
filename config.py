@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-import config_models # Подключаем реестр
+import config_models  # Подключаем реестр
 
 load_dotenv()
 
@@ -74,17 +74,15 @@ SYSTEM_PROMPT = (
 # 🎨 НАСТРОЙКИ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (KIE API NAMES)
 # =========================================================
 
-# Список доступных моделей (Имя в меню : Системное имя KIE)
-# Тариф START
-IMG_POLLINATIONS = "pollinations"                     # Бесплатно (работает локально)
-IMG_FLUX_SCHNELL = "flux-2/pro-text-to-image"         # Официальный Flux 2 на KIE
-IMG_SD3_TURBO = "gpt-image/1.5-text-to-image"         # GPT-4o Image (вместо SD3)
-IMG_PLAYGROUND = "bytedance/seedream-v4-text-to-image"# Seedream 4.0 (шикарные арты)
+# 🔥 ИСПРАВЛЕНО: Правильные модели с поддержкой нужных параметров
+IMG_POLLINATIONS = "pollinations"                          # Бесплатно (Fallback)
+IMG_NANO_BANANA = "nano-banana-2"                          # 🎯 РЕКОМЕНДУЮ (поддерживает все форматы)
+IMG_FLUX_SCHNELL = "flux-2/pro-text-to-image"              # Flux 2 Pro
+IMG_SEEDREAM = "bytedance/seedream-v4-text-to-image"       # Seedream 4.0
+IMG_GPT_4O = "gpt-4o-image/generate"                       # 🎯 GPT-4o Image (новый API)
 
 # Модель по умолчанию
-DEFAULT_IMG_MODEL = IMG_FLUX_SCHNELL
-
-
+DEFAULT_IMG_MODEL = IMG_NANO_BANANA  # 🔥 Самая стабильная
 
 # =========================================================
 # 🎙 ГОЛОСОВЫЕ ТЕХНОЛОГИИ
@@ -123,11 +121,12 @@ TARIFF_INFO = {
 BTN_NEW_DIALOG = "♻️ НОВЫЙ ЧАТ"
 BTN_HISTORY = "💾 ИСТОРИЯ ЧАТОВ"
 BTN_CHANGE_MODEL = "🧠 Выбор модели"
-BTN_OPENCLAW = "🦞 OpenClaw Агент" # Новая кнопка
+BTN_OPENCLAW = "🦞 OpenClaw Агент"
 BTN_PROFILE = "👤 Мой профиль"
 BTN_TARIFFS = "💳 Тарифные планы"
 BTN_HELP = "🆘 Поддержка"
-BTN_VIDEO = "🎬 Видео Ai"
+BTN_VIDEO = "🎬 Видео AI"
+
 # =========================================================
 # 💬 СООБЩЕНИЯ
 # =========================================================
