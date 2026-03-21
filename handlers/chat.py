@@ -184,11 +184,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     # =========================================================
-# 🪄 РЕЖИМ IMG2IMG (РЕДАКТИРОВАНИЕ ФОТО)
-# =========================================================
-if mode == 'img2img_wait':
-    # Проверяем команду отмены
-    if text.lower() in ['отмена', 'cancel', 'стоп', 'выход']:
+    # 🪄 РЕЖИМ IMG2IMG (РЕДАКТИРОВАНИЕ ФОТО)
+    # =========================================================
+    if mode == 'img2img_wait':
+     # Проверяем команду отмены
+       if text.lower() in ['отмена', 'cancel', 'стоп', 'выход']:
         context.user_data['mode'] = None
         await update.message.reply_text("✅ Режим редактирования отменен.", parse_mode='HTML')
         return
@@ -272,7 +272,41 @@ if mode == 'img2img_wait':
             except Exception as e2:
                 logger.error(f"❌ Критический сбой: {e2}")
         return
-
+    if mode == 'img2img_wait':
+        # Проверяем команду отмены
+        if text.lower() in ['отмена', 'cancel', 'стоп', 'выход']:
+            context.user_data['mode'] = None
+            await update.message.reply_text("✅ Режим редактирования отменен.", parse_mode='HTML')
+            return
+        
+        # Берем исходное фото
+        source_path = context.user_data.get('img2img_source_path')
+        
+        if not source_path or not os.path.exists(source_path):
+            await update.message.reply_text(
+                "⚠️ Исходное фото потеряно. Загрузите новое.",
+                parse_mode='HTML'
+            )
+            context.user_data['mode'] = None
+            return
+        
+        # Сбрасываем режим
+        context.user_data['mode'] = None
+        
+        # Сохраняем промпт и путь
+        context.user_data['img_prompt'] = text
+        context.user_data['img2img_mode'] = True  # Флаг что это img2img
+        
+        # Показываем выбор формата
+        from keyboards.ai_image import get_ratio_keyboard
+        await update.message.reply_text(
+            f"📐 <b>Выберите формат результата:</b>\n\n"
+            f"<i>Изменение: {text[:50]}...</i>",
+            reply_markup=get_ratio_keyboard(),
+            parse_mode='HTML'
+        )
+        return
+        
     if mode == 'img_wait':
         prompt = text
         context.user_data['mode'] = None
@@ -294,4 +328,4 @@ if mode == 'img2img_wait':
     # =========================================================
     # 🧠 СТАНДАРТНЫЙ ЗАПРОС К AI
     # =========================================================
-    await process_ai_request(update, context, text)
+   await process_ai_request(update, context, text)
