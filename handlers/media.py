@@ -5,7 +5,7 @@ import logging
 import asyncio
 import urllib.parse
 import aiohttp
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
@@ -50,19 +50,27 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
         
         try:
-            # 🔥 Скачиваем через aiohttp вместо прямой ссылки
             async with aiohttp.ClientSession() as session:
                 async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     if resp.status == 200:
                         image_data = await resp.read()
                         
-                        await context.bot.send_photo(
-                            chat_id=user_id,
-                            photo=image_data,
-                            caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Fallback)</code>\nPrompt: {safe_prompt}\n\n⚠️ <i>Основная нейросеть временно недоступна, использован резерв.</i>", 
-                            reply_markup=get_post_generation_keyboard(),
-                            parse_mode='HTML'
-                        )
+                        # 🔥 СОХРАНЯЕМ ДЛЯ VISION
+                        save_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"pol_{user_id}_{uuid.uuid4().hex[:8]}.png"))
+                        with open(save_path, 'wb') as f:
+                            f.write(image_data)
+                        
+                        context.user_data['last_photo_path'] = save_path
+                        context.user_data['vision_mode'] = True
+                        
+                        with open(save_path, 'rb') as photo:
+                            await context.bot.send_photo(
+                                chat_id=user_id,
+                                photo=photo,
+                                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Fallback)</code>\n\n💡 <i>Vision активирован!</i>\n\nPrompt: {safe_prompt}", 
+                                reply_markup=get_post_generation_keyboard(),
+                                parse_mode='HTML'
+                            )
                     else:
                         raise Exception(f"HTTP {resp.status}")
         except Exception as e:
@@ -87,46 +95,49 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio)
     
     if result_url:
-    try:
-        # 🔥 СКАЧИВАЕМ ИЗОБРАЖЕНИЕ ДЛЯ VISION
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.get(result_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status == 200:
-                    # Сохраняем на диск
-                    import uuid
-                    save_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.png"))
-                    
-                    with open(save_path, 'wb') as f:
-                        f.write(await resp.read())
-                    
-                    # 🔥 СОХРАНЯЕМ ПУТЬ ДЛЯ VISION
-                    context.user_data['last_photo_path'] = save_path
-                    context.user_data['vision_mode'] = True
-                    
-                    # Отправляем фото из файла
-                    with open(save_path, 'rb') as photo_file:
+        try:
+            # 🔥 СКАЧИВАЕМ ИЗОБРАЖЕНИЕ ДЛЯ VISION
+            async with aiohttp.ClientSession() as session:
+                async with session.get(result_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status == 200:
+                        # Сохраняем на диск
+                        save_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.png"))
+                        
+                        with open(save_path, 'wb') as f:
+                            f.write(await resp.read())
+                        
+                        # 🔥 СОХРАНЯЕМ ПУТЬ ДЛЯ VISION
+                        context.user_data['last_photo_path'] = save_path
+                        context.user_data['vision_mode'] = True
+                        
+                        # Отправляем фото из файла
+                        with open(save_path, 'rb') as photo_file:
+                            await context.bot.send_photo(
+                                chat_id=user_id,
+                                photo=photo_file,
+                                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\n\n💡 <i>Vision активирован — можете попросить изменить что-то на картинке!</i>\n\nPrompt: {safe_prompt}", 
+                                reply_markup=get_post_generation_keyboard(),
+                                parse_mode='HTML'
+                            )
+                        await msg.delete()
+                    else:
+                        # Если не удалось скачать — отправляем URL
                         await context.bot.send_photo(
                             chat_id=user_id,
-                            photo=photo_file,
-                            caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\n\n💡 <i>Vision активирован — можете попросить изменить что-то на картинке!</i>\n\nPrompt: {safe_prompt}", 
+                            photo=result_url, 
+                            caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\nPrompt: {safe_prompt}", 
                             reply_markup=get_post_generation_keyboard(),
                             parse_mode='HTML'
                         )
-                    await msg.delete()
-                else:
-                    # Если не удалось скачать — отправляем URL
-                    await context.bot.send_photo(
-                        chat_id=user_id,
-                        photo=result_url, 
-                        caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\nPrompt: {safe_prompt}", 
-                        reply_markup=get_post_generation_keyboard(),
-                        parse_mode='HTML'
-                    )
-                    await msg.delete()
-    except Exception as e:
-        logger.error(f"❌ Telegram Photo Send Error: {e}")
-        await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
+                        await msg.delete()
+        except Exception as e:
+            logger.error(f"❌ Telegram Photo Send Error: {e}")
+            await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
+    else:
+        # FALLBACK
+        await msg.delete()
+        await generate_pollinations_fallback(f"KIE Error with model {img_model}")
+
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -172,7 +183,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from .chat import process_ai_request
         await process_ai_request(update, context, caption, image_path=path)
     else:
-        # Если подписи нет — показываем кнопки + автоматический анализ
+        # Если подписи нет — показываем кнопки
         instruction_text = (
             "📸 <b>Изображение получено!</b>\n\n"
             "💡 <i>Vision режим активирован — просто напишите, что нужно сделать с фото!</i>\n\n"
@@ -185,23 +196,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
 
-def get_post_generation_keyboard() -> InlineKeyboardMarkup:
-    """
-    Клавиатура под готовым изображением.
-    """
-    keyboard = [
-        [
-            InlineKeyboardButton("🔄 Новая генерация", callback_data="feature_design"),
-            InlineKeyboardButton("📐 Изменить размер", callback_data="img_change_ratio")
-        ],
-        [
-            InlineKeyboardButton("✨ Улучшить качество", callback_data="img_upscale"),
-            InlineKeyboardButton("🪄 Редактировать", callback_data="img_edit_mode")
-        ],
-        [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_features")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-    
+
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Перехватчик документов для OpenClaw
