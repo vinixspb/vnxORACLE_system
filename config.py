@@ -44,7 +44,7 @@ BRAVE_API_KEY_START = os.getenv("BRAVE_API_KEY_START")
 BRAVE_API_KEY_PRO = os.getenv("BRAVE_API_KEY_PRO")
 BRAVE_API_KEY_NEO = os.getenv("BRAVE_API_KEY_NEO")
 
-# ✈️ Ключ для поиска авиабилетов (План Б)
+# ✈️ Ключ для поиска авиабилетов
 FLIGHT_API_KEY = os.getenv("FLIGHT_API_KEY")
 
 TEXT_BASE_URL = "https://openrouter.ai/api/v1"
@@ -59,7 +59,7 @@ DEFAULT_MODEL = config_models.DEFAULT_MODEL_ID
 # --- ПАРАМЕТРЫ ---
 AI_TEMPERATURE = 0.7
 
-# --- SYSTEM PROMPT (ОБНОВЛЕН: Интеграция с OpenClaw) ---
+# --- SYSTEM PROMPT ---
 SYSTEM_PROMPT = (
     "Ты — vnxORACLE, передовой ИИ-ассистент 5-го поколения системы vnxMATRIX. "
     "Твоя цель — быть максимально полезным, вовлеченным и проактивным.\n\n"
@@ -71,18 +71,25 @@ SYSTEM_PROMPT = (
 )
 
 # =========================================================
-# 🎨 НАСТРОЙКИ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (KIE API NAMES)
+# 🎨 НАСТРОЙКИ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ И ВИДЕО (KIE API)
 # =========================================================
 
-# 🔥 ИСПРАВЛЕНО: Правильные модели с поддержкой нужных параметров
+# --- ИЗОБРАЖЕНИЯ ---
 IMG_POLLINATIONS = "pollinations"                          # Бесплатно (Fallback)
-IMG_NANO_BANANA = "nano-banana-2"                          # 🎯 РЕКОМЕНДУЮ (поддерживает все форматы)
+IMG_NANO_BANANA = "nano-banana-2"                          # Nano Banana 2 (Быстрая и точная)
 IMG_FLUX_SCHNELL = "flux-2/pro-text-to-image"              # Flux 2 Pro
 IMG_SEEDREAM = "bytedance/seedream-v4-text-to-image"       # Seedream 4.0
-IMG_GPT_4O = "gpt-4o-image/generate"                       # 🎯 GPT-4o Image (новый API)
+IMG_QWEN_2 = "qwen-image-2"                                # 🆕 Qwen 2.0 (Идеально для текста на артах)
+IMG_GPT_4O = "gpt-4o-image/generate"                       # GPT-4o Image
 
 # Модель по умолчанию
-DEFAULT_IMG_MODEL = IMG_NANO_BANANA  # 🔥 Самая стабильная
+DEFAULT_IMG_MODEL = IMG_NANO_BANANA
+
+# --- ВИДЕО ---
+VIDEO_KLING_3 = "kling-3-motion-control"                   # 🆕 Kling 3.0 (Кинематографичная анимация)
+VIDEO_GROK = "grok-video/generate"                         # Базовая видео-модель
+
+DEFAULT_VIDEO_MODEL = VIDEO_KLING_3
 
 # =========================================================
 # 🎙 ГОЛОСОВЫЕ ТЕХНОЛОГИИ
@@ -96,22 +103,34 @@ VOICE_MIMI = "zrHiDhphv9ZnVXBqCLjz"
 DEFAULT_VOICE = VOICE_ADAM
 
 # =========================================================
-# 💰 ЭКОНОМИКА И ТАРИФЫ (ОБНОВЛЕН: Добавлен OpenClaw)
+# 💰 ЭКОНОМИКА И ТАРИФЫ
 # =========================================================
 LIMITS = {"START": 10, "PRO": 30, "NEO": 60}
 
 TARIFF_INFO = {
     "START": (
         "💠 <b>TARIFF: START</b>\n<i>(Базовый доступ)</i>\n"
-        "├ LLM: GPT-4o Mini\n├ Память: 10 msg\n├ Art: Basic (4 модели)\n└ Цена: 190₽ / мес"
+        "├ LLM: GPT-4o Mini\n"
+        "├ Память: 10 msg\n"
+        "├ Art: Basic (Nano Banana, Flux)\n"
+        "└ Цена: 190₽ / мес"
     ),
     "PRO": (
         "⚡️ <b>TARIFF: PRO</b>\n<i>(Профессиональный)</i>\n"
-        "├ LLM: GPT-4o (Flagship)\n├ Память: 30 msg\n├ Vision: ✅\n├ Art: Premium (8 моделей)\n└ Цена: 590₽ / мес"
+        "├ LLM: GPT-5.2, Claude 4.5 Sonnet\n"
+        "├ Память: 30 msg\n"
+        "├ Vision: ✅\n"
+        "├ Art: Premium (Qwen 2.0, GPT-4o Image)\n"
+        "├ Video: Kling 3.0 ✅\n"
+        "└ Цена: 590₽ / мес"
     ),
     "NEO": (
         "🧬 <b>TARIFF: NEO (EVOLUTION)</b>\n<i>(Максимальный)</i>\n"
-        "├ LLM: Claude 3.5 Sonnet\n├ Агент: 🦞 OpenClaw (Терминал)\n├ Память: 60 msg\n├ Vision/Video: ✅\n└ Цена: 990₽ / мес"
+        "├ LLM: Claude 4.6 Opus, GPT-5.3 Codex\n"
+        "├ Агент: 🦞 OpenClaw (Терминал)\n"
+        "├ Память: 60 msg\n"
+        "├ Vision/Video: Full Access ✅\n"
+        "└ Цена: 990₽ / мес"
     )
 }
 
@@ -133,7 +152,7 @@ BTN_VIDEO = "🎬 Видео AI"
 MSG_WELCOME = (
     "👁 <b>vnxORACLE SYSTEM: ONLINE</b>\n\n"
     "Добро пожаловать. Я — интерфейс чистого знания.\n"
-    "Готов к обработке данных: Текст, Голос, Изображения, Код.\n"
+    "Готов к обработке данных: Текст, Голос, Изображения, Видео, Код.\n"
     "Для управления сервером используйте <b>OpenClaw Агент</b>.\n"
 )
 MSG_NO_SUB = "⛔️ <b>ДОСТУП ОГРАНИЧЕН</b>\n\nВаш нейро-линк не активен.\nДля подключения выберите тариф:"
