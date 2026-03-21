@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class KieClient:
     def __init__(self):
         self.api_key = config.KIE_API_KEY
-        self.base_url = "https://api.kie.ai/api/v1" # <-- ОСТАВЬ ТОЛЬКО ЧИСТЫЙ АДРЕС
+        self.base_url = "https://api.kie.ai/api/v1"
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -32,45 +32,54 @@ class KieClient:
         # 🧠 1. Определяем семейство нейросети
         model_family = "default"
         model_lower = model.lower()
-        if "flux" in model_lower: model_family = "flux"
-        elif "seedream" in model_lower: model_family = "seedream"
-        elif "gpt" in model_lower or "dall" in model_lower: model_family = "gpt"
-        elif "grok" in model_lower: model_family = "grok"
-        elif "qwen" in model_lower: model_family = "qwen"
-        elif "sd3" in model_lower or "stabilityai" in model_lower: model_family = "sd3" # <-- Добавили Nano Banana
-        elif "midjourney" in model_lower or "mj" in model_lower: model_family = "midjourney" # <-- Добавили Midjourney
+        
+        if "nano-banana" in model_lower or "nano_banana" in model_lower:
+            model_family = "nano_banana"
+        elif "flux" in model_lower:
+            model_family = "flux"
+        elif "seedream" in model_lower:
+            model_family = "seedream"
+        elif "grok" in model_lower:
+            model_family = "grok"
+        elif "qwen" in model_lower:
+            model_family = "qwen"
+        elif "sd3" in model_lower or "stabilityai" in model_lower:
+            model_family = "sd3"
+        elif "midjourney" in model_lower or "mj" in model_lower:
+            model_family = "midjourney"
+        # 🚨 GPT/DALL-E убираем — они не поддерживаются в KIE
 
-        # 🧠 2. ИДЕАЛЬНАЯ МАТРИЦА (со всеми моделями - Отредактировано под KIE Spec)
+        # 🧠 2. ИСПРАВЛЕННАЯ МАТРИЦА (только работающие модели)
         config_matrix = {
             "vertical": {
+                "nano_banana": {"aspect_ratio": "9:16", "resolution": "1K", "output_format": "png"},
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "gpt": {"aspect_ratio": "9:16", "output_format": "png"},
                 "grok": {"aspect_ratio": "9:16"},
                 "qwen": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"}, # <-- Явно 9:16
+                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"},
                 "midjourney": {"aspect_ratio": "9:16"},
-                "default": {"aspect_ratio": "9:16"}
+                "default": {"aspect_ratio": "9:16", "resolution": "1K"}
             },
             "horizontal": {
+                "nano_banana": {"aspect_ratio": "16:9", "resolution": "1K", "output_format": "png"},
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "gpt": {"aspect_ratio": "16:9", "output_format": "png"},
                 "grok": {"aspect_ratio": "16:9"},
                 "qwen": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "16:9", "output_format": "jpeg"}, # <-- Явно 16:9
+                "sd3": {"aspect_ratio": "16:9", "output_format": "jpeg"},
                 "midjourney": {"aspect_ratio": "16:9"},
-                "default": {"aspect_ratio": "16:9"}
+                "default": {"aspect_ratio": "16:9", "resolution": "1K"}
             },
             "square": {
+                "nano_banana": {"aspect_ratio": "1:1", "resolution": "1K", "output_format": "png"},
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "gpt": {"aspect_ratio": "1:1", "output_format": "png"},
                 "grok": {"aspect_ratio": "1:1"},
                 "qwen": {"image_size": "square", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "1:1", "output_format": "jpeg"}, # <-- Явно 1:1
+                "sd3": {"aspect_ratio": "1:1", "output_format": "jpeg"},
                 "midjourney": {"aspect_ratio": "1:1"},
-                "default": {"aspect_ratio": "1:1"}
+                "default": {"aspect_ratio": "1:1", "resolution": "1K"}
             }
         }
 
@@ -89,20 +98,23 @@ class KieClient:
         # --- Отправка задачи ---
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
-                async with session.post(create_url, json=payload) as resp:
+                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     data = await resp.json()
                     if data.get("code") != 200:
-                        # 🔥 Расширенное логирование: теперь мы видим, из-за чего ошибка 500!
                         logger.error(f"❌ KIE Create Task Error: {data} | Sent Payload: {payload}")
                         return None, None
                     
                     task_id = data.get("data", {}).get("taskId")
                     logger.info(f"✅ KIE Task Created: {task_id} (Model: {model}, Ratio: {ratio})")
+            except asyncio.TimeoutError:
+                logger.error(f"❌ KIE Timeout: API не ответил за 30 секунд")
+                return None, None
             except Exception as e:
                 logger.error(f"❌ KIE Network Error: {e}")
                 return None, None
 
-        if not task_id: return None, None
+        if not task_id:
+            return None, None
 
         # --- Ожидание результата ---
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
@@ -110,11 +122,12 @@ class KieClient:
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(max_attempts):
-                await asyncio.sleep(3) 
+                await asyncio.sleep(3)
                 try:
-                    async with session.get(query_url) as resp:
+                    async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                         result_data = await resp.json()
-                        if result_data.get("code") != 200: continue
+                        if result_data.get("code") != 200:
+                            continue
                             
                         task_info = result_data.get("data", {})
                         state = task_info.get("state")
@@ -127,20 +140,30 @@ class KieClient:
                                 logger.info(f"🎨 KIE Task Completed! URL: {image_url}")
                                 return image_url, task_id
                             except json.JSONDecodeError:
+                                logger.error(f"❌ KIE JSON Parse Error")
                                 return None, None
                         elif state == "fail":
-                            logger.error(f"❌ KIE Task Failed: {task_info.get('failMsg', 'Unknown')}")
+                            fail_msg = task_info.get('failMsg', 'Unknown')
+                            logger.error(f"❌ KIE Task Failed: {fail_msg}")
                             return None, None
-                except Exception:
-                    continue 
+                        # Если waiting — продолжаем ждать
+                except asyncio.TimeoutError:
+                    logger.warning(f"⚠️ KIE Query Timeout (attempt {attempt+1}/{max_attempts})")
+                    continue
+                except Exception as e:
+                    logger.warning(f"⚠️ KIE Query Error (attempt {attempt+1}): {e}")
+                    continue
 
+        logger.error(f"❌ KIE Task Timeout: задача не завершилась за {max_attempts * 3} секунд")
         return None, None
 
     # ==========================================
     # 🎬 ГЕНЕРАЦИЯ ВИДЕО
     # ==========================================
     async def generate_video(self, prompt: str, model: str, ratio: str = "vertical") -> str:
-        if not self.api_key: return None
+        if not self.api_key:
+            return None
+            
         create_url = f"{self.base_url}/jobs/createTask"
         
         config_matrix = {
@@ -164,7 +187,7 @@ class KieClient:
         task_id = None
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
-                async with session.post(create_url, json=payload) as resp:
+                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     data = await resp.json()
                     if data.get("code") == 200:
                         task_id = data.get("data", {}).get("taskId")
@@ -175,18 +198,20 @@ class KieClient:
                 logger.error(f"❌ KIE Network Error (Video): {e}")
                 return None
 
-        if not task_id: return None
+        if not task_id:
+            return None
 
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
-        max_attempts = 100 
+        max_attempts = 100
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(max_attempts):
-                await asyncio.sleep(3) 
+                await asyncio.sleep(3)
                 try:
-                    async with session.get(query_url) as resp:
+                    async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                         result_data = await resp.json()
-                        if result_data.get("code") != 200: continue
+                        if result_data.get("code") != 200:
+                            continue
                             
                         state = result_data.get("data", {}).get("state")
                         if state == "success":
@@ -201,14 +226,17 @@ class KieClient:
                         elif state == "fail":
                             return None
                 except Exception:
-                    continue 
+                    continue
+                    
         return None
 
     # ==========================================
     # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (UPSCALE)
     # ==========================================
     async def upscale_image(self, original_task_id: str) -> str:
-        if not self.api_key: return None
+        if not self.api_key:
+            return None
+            
         create_url = f"{self.base_url}/jobs/createTask"
         
         payload = {
@@ -219,7 +247,7 @@ class KieClient:
         task_id = None
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
-                async with session.post(create_url, json=payload) as resp:
+                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     data = await resp.json()
                     if data.get("code") == 200:
                         task_id = data.get("data", {}).get("taskId")
@@ -228,17 +256,19 @@ class KieClient:
                 logger.error(f"❌ KIE Network Error (Upscale): {e}")
                 return None
 
-        if not task_id: return None
+        if not task_id:
+            return None
 
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(60):
-                await asyncio.sleep(3) 
+                await asyncio.sleep(3)
                 try:
-                    async with session.get(query_url) as resp:
+                    async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                         result_data = await resp.json()
-                        if result_data.get("code") != 200: continue
+                        if result_data.get("code") != 200:
+                            continue
                             
                         state = result_data.get("data", {}).get("state")
                         if state == "success":
@@ -253,7 +283,8 @@ class KieClient:
                         elif state == "fail":
                             return None
                 except Exception:
-                    continue 
+                    continue
+                    
         return None
 
 kie_studio = KieClient()
