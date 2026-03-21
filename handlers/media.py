@@ -140,22 +140,27 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_tariff not in ['PRO', 'NEO']:
         return await update.message.reply_text("🧬 <b>VISION MODULE</b> доступен на уровнях PRO и NEO.", parse_mode='HTML')
     
-    # 🔥 ВКЛЮЧАЕМ РЕЖИМ VISION
+    # 🔥 АВТОМАТИЧЕСКИ ВКЛЮЧАЕМ VISION + АНАЛИЗИРУЕМ ФОТО
     context.user_data['vision_mode'] = True
     
-    instruction_text = (
-        "📸 <b>Изображение получено!</b>\n\n"
-        "Выберите действие:\n"
-        "👁 <b>Распознать (Vision)</b>\n"
-        "🪄 <b>Редактировать (Img2Img)</b>\n"
-        "✨ <b>Улучшить (Upscale)</b>\n\n"
-        "💡 <i>Или просто напишите, что нужно изменить/проанализировать — я продолжу работу с этим фото!</i>"
-    )
+    # Если есть подпись — сразу обрабатываем как запрос
     if caption:
-        instruction_text += f"\n\n<i>Ваш промпт: {caption}</i>"
-
-    await update.message.reply_text(instruction_text, reply_markup=get_photo_action_keyboard(), parse_mode='HTML')
-
+        logger.info(f"👁 Auto Vision: анализ с подписью '{caption}'")
+        from .chat import process_ai_request
+        await process_ai_request(update, context, caption, image_path=path)
+    else:
+        # Если подписи нет — показываем кнопки + автоматический анализ
+        instruction_text = (
+            "📸 <b>Изображение получено!</b>\n\n"
+            "💡 <i>Vision режим активирован — просто напишите, что нужно сделать с фото!</i>\n\n"
+            "Или выберите быстрое действие:"
+        )
+        
+        await update.message.reply_text(
+            instruction_text, 
+            reply_markup=get_photo_action_keyboard(), 
+            parse_mode='HTML'
+        )
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
