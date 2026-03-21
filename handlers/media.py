@@ -185,6 +185,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
 
+def get_post_generation_keyboard() -> InlineKeyboardMarkup:
+    """
+    Клавиатура под готовым изображением.
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton("🔄 Новая генерация", callback_data="feature_design"),
+            InlineKeyboardButton("📐 Изменить размер", callback_data="img_change_ratio")
+        ],
+        [
+            InlineKeyboardButton("✨ Улучшить качество", callback_data="img_upscale"),
+            InlineKeyboardButton("🪄 Редактировать", callback_data="img_edit_mode")
+        ],
+        [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_features")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+    
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Перехватчик документов для OpenClaw
