@@ -116,4 +116,62 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
         return await msg.edit_text(response, parse_mode='HTML')
 
-    elif mode == 'video_im
+    elif mode == 'video_image_wait':
+        context.user_data['last_photo_path'] = path
+        context.user_data['last_photo_caption'] = caption
+        await update.message.reply_text("🎬 <b>Фото получено!</b>\nИнициализация модуля оживления... (Требуется обновление KIE API)", parse_mode='HTML')
+        return
+
+    user_tariff = sheets_mgr.get_user_tariff(user_id)
+    if user_tariff not in ['PRO', 'NEO']:
+        return await update.message.reply_text("🧬 <b>VISION MODULE</b> доступен на уровнях PRO и NEO.", parse_mode='HTML')
+        
+    context.user_data['last_photo_path'] = path
+    context.user_data['last_photo_caption'] = caption
+    
+    instruction_text = (
+        "📸 <b>Изображение получено!</b>\n\n"
+        "Выберите действие:\n"
+        "👁 <b>Распознать (Vision)</b>\n"
+        "🪄 <b>Редактировать (Img2Img)</b>\n"
+        "✨ <b>Улучшить (Upscale)</b>"
+    )
+    if caption:
+        instruction_text += f"\n\n<i>Ваш промпт: {caption}</i>"
+
+    await update.message.reply_text(instruction_text, reply_markup=get_photo_action_keyboard(), parse_mode='HTML')
+
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    mode = context.user_data.get('mode')
+    
+    document = update.message.document
+    caption = update.message.caption or "Изучи этот документ."
+    
+    safe_name = "".join(c for c in document.file_name if c.isalnum() or c in " ._-")
+    
+    file = await context.bot.get_file(document.file_id)
+    path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"d_{user_id}_{safe_name}"))
+    await file.download_to_drive(path)
+
+    if mode == 'openclaw_wait':
+        from services.openclaw_core import claw_manager
+        user_name = update.effective_user.first_name or "User"
+        
+        msg = await update.message.reply_text(f"🦞 <i>Скачал файл {safe_name}. Агент приступил к анализу...</i>", parse_mode='HTML')
+        
+        injected_prompt = (
+            f"{caption}\n\n"
+            f"[SYSTEM COMMAND: Пользователь только что загрузил файл.\n"
+            f"Имя: {document.file_name}\n"
+            f"Абсолютный путь: {path}\n"
+            f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль (не используй cat или вывод всего текста). "
+            f"Если это таблица (Excel/CSV/JSON) или большой документ, напиши и выполни Python-скрипт (например, с использованием pandas), "
+            f"чтобы проанализировать данные локально, и выведи пользователю ТОЛЬКО готовый ответ, аналитику или запрошенную сумму!]"
+        )
+        
+        response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
+        await msg.edit_text(response, parse_mode='HTML')
+    else:
+        await update.message.reply_text(f"📁 <b>Файл сохранен:</b> {safe_name}\nЧтобы я мог сделать выжимку или аналитику, перейдите в меню 🦞 <b>OpenClaw</b> и отправьте его там.", parse_mode='HTML')
