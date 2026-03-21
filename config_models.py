@@ -9,54 +9,51 @@ FALLBACK_MODEL = "mistralai/mistral-7b-instruct:free"
 FALLBACK_NAME = "Mistral 7B (Core)"
 
 # --- ДЕФОЛТНАЯ МОДЕЛЬ ---
-DEFAULT_MODEL_ID = "openai/o3-mini"  # Самая умная и дешевая Gen 5
+DEFAULT_MODEL_ID = "google/gemini-2.0-flash-001"  # 🔥 БЕСПЛАТНО!
 
 # =========================================================
-# 💠 ТАРИФ START (Базовые модели)
+# 💠 ТАРИФ START (Бесплатные и дешевые)
 # =========================================================
 MODELS_START = [
-    # 🔥 Новое поколение OpenAI (Gen 5: Reasoning)
-    ("🧮 OpenAI o3-mini (Gen 5)", "openai/o3-mini"),
-    ("⚡️ GPT-4o Mini (Classic)", "openai/gpt-4o-mini"),
+    # 🌐 Google Gemini (БЕСПЛАТНО!)
+    ("💎 Gemini 2.0 Flash (Рекомендуем)", "google/gemini-2.0-flash-001"),
+    ("💎 Gemini 2.5 Flash", "google/gemini-2.5-flash"),
     
-    # 🌐 Google Gemini (2-е поколение)
-    ("💎 Gemini 2.0 Flash", "google/gemini-2.0-flash-001"),
-    ("💎 Gemini 2.5 Flash", "google/gemini-2.5-flash"),  # На будущее
-    
-    # 🧬 Anthropic (Сверхбыстрый)
-    ("⚡️ Claude 3.5 Haiku", "anthropic/claude-3-5-haiku-20241022"),
-    
-    # 🔬 DeepSeek (Хит 2026, дешево и мощно)
+    # 🔬 DeepSeek (Очень дешево)
     ("🎯 DeepSeek V3 (Chat)", "deepseek/deepseek-chat"),
     ("🧠 DeepSeek R1 (Reasoning)", "deepseek/deepseek-reasoner"),
     
-    # 🦙 Meta (Open-Source флагман)
+    # ⚡️ OpenAI Базовый
+    ("⚡️ GPT-4o Mini", "openai/gpt-4o-mini"),
+    
+    # 🦙 Meta Open-Source
     ("🦙 Llama 3.3 70B", "meta-llama/llama-3.3-70b-instruct"),
     
-    # 🇫🇷 Mistral (Надежный европейский)
+    # 🧬 Anthropic Быстрый
+    ("⚡️ Claude 3.5 Haiku", "anthropic/claude-3-5-haiku-20241022"),
+    
+    # 🇫🇷 Mistral Европейский
     ("🇫🇷 Mistral Small 3", "mistralai/mistral-small-24b-instruct-2501")
 ]
 
 # =========================================================
-# ⚡️ ТАРИФ PRO (Флагманы + Интернет)
+# ⚡️ ТАРИФ PRO (Флагманы)
 # =========================================================
 MODELS_PRO = [
     ("🧠 GPT-4o (Flagship)", "openai/gpt-4o-2024-08-06"),
-    ("🧠 GPT-5.2 (Новинка)", "openai/gpt-5.2"),  # 🆕 Если доступен в OpenRouter
     ("🧬 Claude 3.5 Sonnet", "anthropic/claude-3.5-sonnet"),
-    ("🧬 Claude 4.5 Sonnet", "anthropic/claude-4.5-sonnet"),  # 🆕 Март 2026
+    ("🧮 o3-mini (Reasoning)", "openai/o3-mini"),
     ("🌐 Perplexity Online", "perplexity/llama-3.1-sonar-large-128k-online"),
     ("💻 Qwen 2.5 Coder 32B", "qwen/qwen-2.5-coder-32b-instruct")
 ]
 
 # =========================================================
-# 🧬 ТАРИФ NEO (Максимум: Opus, o1, Reasoning)
+# 🧬 ТАРИФ NEO (Максимум)
 # =========================================================
 MODELS_NEO = [
-    ("👑 Claude 4.6 Opus", "anthropic/claude-4.6-opus"),  # 🆕 Самая мощная модель
-    ("👑 GPT-5.3 Codex", "openai/gpt-5.3-codex"),  # 🆕 Для программирования
+    ("👑 Claude 3.5 Opus", "anthropic/claude-3.5-opus"),
     ("🧮 o1 Preview (Reasoning)", "openai/o1-preview"),
-    ("🧮 o1 (Full)", "openai/o1"),  # Полная версия o1
+    ("🧮 o1 (Full)", "openai/o1"),
     ("👑 Gemini Ultra 1.5", "google/gemini-1.5-ultra")
 ]
 
