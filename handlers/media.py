@@ -87,23 +87,46 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio)
     
     if result_url:
-        try:
-            await context.bot.send_photo(
-                chat_id=user_id,
-                photo=result_url, 
-                caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\nPrompt: {safe_prompt}", 
-                reply_markup=get_post_generation_keyboard(),
-                parse_mode='HTML'
-            )
-            await msg.delete()
-        except Exception as e:
-            logger.error(f"❌ Telegram Photo Send Error: {e}")
-            await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
-    else:
-        # FALLBACK
-        await msg.delete()
-        await generate_pollinations_fallback(f"KIE Error with model {img_model}")
-
+    try:
+        # 🔥 СКАЧИВАЕМ ИЗОБРАЖЕНИЕ ДЛЯ VISION
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(result_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    # Сохраняем на диск
+                    import uuid
+                    save_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.png"))
+                    
+                    with open(save_path, 'wb') as f:
+                        f.write(await resp.read())
+                    
+                    # 🔥 СОХРАНЯЕМ ПУТЬ ДЛЯ VISION
+                    context.user_data['last_photo_path'] = save_path
+                    context.user_data['vision_mode'] = True
+                    
+                    # Отправляем фото из файла
+                    with open(save_path, 'rb') as photo_file:
+                        await context.bot.send_photo(
+                            chat_id=user_id,
+                            photo=photo_file,
+                            caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\n\n💡 <i>Vision активирован — можете попросить изменить что-то на картинке!</i>\n\nPrompt: {safe_prompt}", 
+                            reply_markup=get_post_generation_keyboard(),
+                            parse_mode='HTML'
+                        )
+                    await msg.delete()
+                else:
+                    # Если не удалось скачать — отправляем URL
+                    await context.bot.send_photo(
+                        chat_id=user_id,
+                        photo=result_url, 
+                        caption=f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nRatio: {ratio}\nPrompt: {safe_prompt}", 
+                        reply_markup=get_post_generation_keyboard(),
+                        parse_mode='HTML'
+                    )
+                    await msg.delete()
+    except Exception as e:
+        logger.error(f"❌ Telegram Photo Send Error: {e}")
+        await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
