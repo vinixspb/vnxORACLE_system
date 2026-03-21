@@ -1,7 +1,7 @@
 import logging
-import os  # 👈 Жизненно важный импорт для фото!
+import os
 import config
-import config_models  # Реестр моделей
+import config_models
 from loader import sheets_mgr, db, USER_MODELS
 import keyboards
 from handlers.video import ask_video_prompt
@@ -134,14 +134,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =========================================================
     elif data == "feature_design":
         context.user_data['mode'] = None
-        # Ставим бесплатную Pollinations по умолчанию, если юзер еще ничего не выбирал
         curr_img = context.user_data.get('img_model', config.IMG_POLLINATIONS)
         
         try:
             from keyboards.ai_image import get_image_models_keyboard
             markup = get_image_models_keyboard(user_id, curr_img)
             
-            # 🔥 КРАСИВЫЙ ПРОДАЮЩИЙ ТЕКСТ ДЛЯ ЮЗЕРОВ
             text = (
                 "🎨 <b>СТУДИЯ ДИЗАЙНА vnxORACLE</b>\n\n"
                 "Я могу нарисовать всё, что вы представите. Выберите "
@@ -172,57 +170,57 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
 
-   # =========================================================
-   # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО
-   # =========================================================
-   elif data == "photo_vision":
-    path = context.user_data.get('last_photo_path')
-    caption = context.user_data.get('last_photo_caption') or "Что на этом фото подробно?"
+    # =========================================================
+    # 📸 ОБРАБОТКА ВХОДЯЩИХ ФОТО
+    # =========================================================
+    elif data == "photo_vision":
+        path = context.user_data.get('last_photo_path')
+        caption = context.user_data.get('last_photo_caption') or "Что на этом фото подробно?"
 
-    if not path or not os.path.exists(path):
-        await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
-        return
+        if not path or not os.path.exists(path):
+            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            return
 
-    await query.message.delete()
-    from handlers.chat import process_ai_request
-    await process_ai_request(update, context, caption, image_path=path)
+        await query.message.delete()
+        from handlers.chat import process_ai_request
+        await process_ai_request(update, context, caption, image_path=path)
 
-   elif data == "photo_edit":
-    path = context.user_data.get('last_photo_path')
-    caption = context.user_data.get('last_photo_caption')
+    elif data == "photo_edit":
+        path = context.user_data.get('last_photo_path')
+        caption = context.user_data.get('last_photo_caption')
 
-    if not path or not os.path.exists(path):
-        await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
-        return
+        if not path or not os.path.exists(path):
+            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            return
 
-    # 🔥 ВКЛЮЧАЕМ РЕЖИМ IMG2IMG
-    context.user_data['mode'] = 'img2img_wait'
-    context.user_data['img2img_source_path'] = path  # Сохраняем путь к исходному фото
-    
-    await query.message.edit_text(
-        "🪄 <b>Режим редактирования активирован!</b>\n\n"
-        "Напишите, что нужно изменить на фото.\n\n"
-        "Примеры:\n"
-        "• 'Сделай небо синим'\n"
-        "• 'Добавь радугу'\n"
-        "• 'Измени цвет машины на красный'\n\n"
-        "💡 <i>Для выхода напишите 'отмена'</i>",
-        parse_mode='HTML'
-    )
+        # 🔥 ВКЛЮЧАЕМ РЕЖИМ IMG2IMG
+        context.user_data['mode'] = 'img2img_wait'
+        context.user_data['img2img_source_path'] = path  # Сохраняем путь к исходному фото
+        
+        await query.message.edit_text(
+            "🪄 <b>Режим редактирования активирован!</b>\n\n"
+            "Напишите, что нужно изменить на фото.\n\n"
+            "Примеры:\n"
+            "• 'Сделай небо синим'\n"
+            "• 'Добавь радугу'\n"
+            "• 'Измени цвет машины на красный'\n\n"
+            "💡 <i>Для выхода напишите 'отмена'</i>",
+            parse_mode='HTML'
+        )
 
-   elif data == "photo_upscale":
-    path = context.user_data.get('last_photo_path')
-    
-    if not path or not os.path.exists(path):
-        await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
-        return
-    
-    await query.message.delete()
-    await query.message.reply_text(
-        "✨ <b>Улучшение качества...</b>\n"
-        "<i>Модуль Upscale в разработке. Скоро будет доступен!</i>",
-        parse_mode='HTML'
-    )
+    elif data == "photo_upscale":
+        path = context.user_data.get('last_photo_path')
+        
+        if not path or not os.path.exists(path):
+            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            return
+        
+        await query.message.delete()
+        await query.message.reply_text(
+            "✨ <b>Улучшение качества...</b>\n"
+            "<i>Модуль Upscale (Grok) сейчас интегрируется в Ядро. Скоро будет доступен!</i>",
+            parse_mode='HTML'
+        )
 
     # =========================================================
     # 📐 ВЫБОР ФОРМАТА ИЗОБРАЖЕНИЯ И ЗАПУСК ГЕНЕРАЦИИ
@@ -317,5 +315,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='HTML'
         )
     
-    try: await query.answer()
-    except: pass
+    try: 
+        await query.answer()
+    except: 
+        pass
