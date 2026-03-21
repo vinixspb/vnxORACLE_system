@@ -21,7 +21,7 @@ class KieClient:
     async def generate_image(self, prompt: str, model: str, ratio: str = "vertical") -> tuple:
         """
         Асинхронная генерация изображений.
-        Возвращает кортеж (image_url, task_id) — task_id нужен для Upscale.
+        Возвращает кортеж (image_url, task_id)
         """
         if not self.api_key:
             logger.error("❌ KIE Client: KIE_API_KEY is missing.")
@@ -35,50 +35,44 @@ class KieClient:
         
         if "nano-banana" in model_lower or "nano_banana" in model_lower:
             model_family = "nano_banana"
+        elif "gpt-4o-image" in model_lower or "gpt4o-image" in model_lower:
+            model_family = "gpt_4o"  # 🔥 НОВЫЙ API
+        elif "gpt-image" in model_lower:
+            model_family = "gpt_legacy"  # Старая GPT модель
         elif "flux" in model_lower:
             model_family = "flux"
         elif "seedream" in model_lower:
             model_family = "seedream"
         elif "grok" in model_lower:
             model_family = "grok"
-        elif "qwen" in model_lower:
-            model_family = "qwen"
-        elif "sd3" in model_lower or "stabilityai" in model_lower:
-            model_family = "sd3"
-        elif "midjourney" in model_lower or "mj" in model_lower:
-            model_family = "midjourney"
-        # 🚨 GPT/DALL-E убираем — они не поддерживаются в KIE
 
-        # 🧠 2. ИСПРАВЛЕННАЯ МАТРИЦА (только работающие модели)
+        # 🧠 2. МАТРИЦА ПАРАМЕТРОВ (с учетом ограничений KIE API)
         config_matrix = {
             "vertical": {
                 "nano_banana": {"aspect_ratio": "9:16", "resolution": "1K", "output_format": "png"},
+                "gpt_4o": {},  # 🔥 GPT-4o использует свой API (не нужны параметры)
+                "gpt_legacy": {"aspect_ratio": "2:3", "quality": "medium"},  # Старая GPT
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
                 "grok": {"aspect_ratio": "9:16"},
-                "qwen": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "9:16", "output_format": "jpeg"},
-                "midjourney": {"aspect_ratio": "9:16"},
                 "default": {"aspect_ratio": "9:16", "resolution": "1K"}
             },
             "horizontal": {
                 "nano_banana": {"aspect_ratio": "16:9", "resolution": "1K", "output_format": "png"},
+                "gpt_4o": {},
+                "gpt_legacy": {"aspect_ratio": "3:2", "quality": "medium"},
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
                 "grok": {"aspect_ratio": "16:9"},
-                "qwen": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "16:9", "output_format": "jpeg"},
-                "midjourney": {"aspect_ratio": "16:9"},
                 "default": {"aspect_ratio": "16:9", "resolution": "1K"}
             },
             "square": {
                 "nano_banana": {"aspect_ratio": "1:1", "resolution": "1K", "output_format": "png"},
+                "gpt_4o": {},
+                "gpt_legacy": {"aspect_ratio": "1:1", "quality": "medium"},
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
                 "grok": {"aspect_ratio": "1:1"},
-                "qwen": {"image_size": "square", "output_format": "png", "num_inference_steps": 30},
-                "sd3": {"aspect_ratio": "1:1", "output_format": "jpeg"},
-                "midjourney": {"aspect_ratio": "1:1"},
                 "default": {"aspect_ratio": "1:1", "resolution": "1K"}
             }
         }
@@ -87,7 +81,7 @@ class KieClient:
         safe_ratio = ratio if ratio in config_matrix else "vertical"
         params = config_matrix[safe_ratio].get(model_family, config_matrix[safe_ratio]["default"])
 
-        # 🧠 3. Собираем идеальный payload
+        # 🧠 3. Собираем payload
         input_data = {"prompt": prompt, "num_images": 1}
         for key, value in params.items():
             input_data[key] = value
@@ -118,7 +112,7 @@ class KieClient:
 
         # --- Ожидание результата ---
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
-        max_attempts = 60 
+        max_attempts = 60
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(max_attempts):
@@ -146,7 +140,6 @@ class KieClient:
                             fail_msg = task_info.get('failMsg', 'Unknown')
                             logger.error(f"❌ KIE Task Failed: {fail_msg}")
                             return None, None
-                        # Если waiting — продолжаем ждать
                 except asyncio.TimeoutError:
                     logger.warning(f"⚠️ KIE Query Timeout (attempt {attempt+1}/{max_attempts})")
                     continue
