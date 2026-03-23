@@ -40,8 +40,8 @@ WAIT_IMAGE = [
     "Ловим музу за хвост...",
     "Ждем, пока высохнут пиксели...",
     "Вымеряем пропорции золотого сечения...",
-    "Просим Nano Banana не хулиганить с цветами...",
-    "Qwen 2.0 подбирает идеальный шрифт..."
+    "Просим ИИ не хулиганить с цветами...",
+    "Подбираем идеальный ракурс..."
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -90,31 +90,42 @@ def get_wait_message(media_type: str = "text") -> str:
 class DynamicWaitMessage:
     """
     Асинхронный фоновый воркер. 
-    Каждые 5 секунд обновляет сообщение Telegram новой шуткой.
+    Каждые 4 секунды обновляет сообщение Telegram новой шуткой.
     """
     def __init__(self, message: Message, media_type: str = "text", prefix: str = ""):
         self.message = message
         self.media_type = media_type
         self.prefix = prefix
         self._task = None
+        
+        # 🔥 Прямые ссылки на бота и чат для надежного обновления
+        self.bot = message.get_bot()
+        self.chat_id = message.chat_id
+        self.message_id = message.message_id
 
     async def _update_loop(self):
         try:
             while True:
-                await asyncio.sleep(5)  # Таймер смены шуток
+                await asyncio.sleep(4)  # 🔥 Меняем шутку каждые 4 секунды
                 new_text = f"{self.prefix}{get_wait_message(self.media_type)}"
                 try:
-                    # Обновляем текст (игнорируем ошибки Telegram, если текст совпал)
-                    await self.message.edit_text(new_text, parse_mode='HTML')
-                except Exception:
-                    pass
+                    await self.bot.edit_message_text(
+                        chat_id=self.chat_id,
+                        message_id=self.message_id,
+                        text=new_text,
+                        parse_mode='HTML'
+                    )
+                except Exception as e:
+                    # Игнорируем ошибку, если рандом выдал ту же самую шутку
+                    if "Message is not modified" not in str(e):
+                        logger.warning(f"WaitMsg Edit Error: {e}")
         except asyncio.CancelledError:
-            pass # Нормальное завершение задачи
+            pass # Нормальное завершение
 
     def start(self):
         if self.message:
             self._task = asyncio.create_task(self._update_loop())
 
     def stop(self):
-        if self._task:
+        if self._task and not self._task.done():
             self._task.cancel()
