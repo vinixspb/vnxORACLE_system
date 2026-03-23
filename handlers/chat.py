@@ -199,9 +199,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = context.user_data.get('mode')
     
     if mode == 'openclaw_wait':
-        from services.messages import get_wait_message
-        wait_text = get_wait_message("text")
-        wait_msg = await update.message.reply_text(wait_text, parse_mode='HTML')
+        from services.messages import get_wait_message, DynamicWaitMessage
+        
+        prefix = "🦞 <b>Агент ищет информацию...</b>\n"
+        wait_msg = await update.message.reply_text(f"{prefix}{get_wait_message('text')}", parse_mode='HTML')
+        
+        # 🔥 Запускаем анимацию
+        loader = DynamicWaitMessage(wait_msg, "text", prefix)
+        loader.start()
         
         from services.openclaw_core import claw_manager
         
@@ -213,10 +218,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             b_key = config.BRAVE_API_KEY_START
 
-        if text.lower() in ['статус', 'status', 'ping']:
-            ans = await claw_manager.check_status()
-        else:
-            ans = await claw_manager.execute_task(text, user_id, update.effective_user.full_name, brave_key=b_key)
+        try:
+            if text.lower() in ['статус', 'status', 'ping']:
+                ans = await claw_manager.check_status()
+            else:
+                ans = await claw_manager.execute_task(text, user_id, update.effective_user.full_name, brave_key=b_key)
+        finally:
+            loader.stop() # Обязательно останавливаем при любом исходе
             
         try:
             await wait_msg.edit_text(ans, parse_mode='HTML')
