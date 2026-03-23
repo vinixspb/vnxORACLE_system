@@ -22,8 +22,13 @@ class KieClient:
         """🛡 ЗАЩИТА ЛОГОВ: Удаляем огромные Base64 строки, чтобы не засорять консоль"""
         safe_payload = copy.deepcopy(payload)
         try:
-            if "input" in safe_payload and "image_input" in safe_payload["input"]:
-                safe_payload["input"]["image_input"] = ["<BASE64_IMAGE_DATA_HIDDEN_FOR_SECURITY>"]
+            if "input" in safe_payload:
+                # Очищаем стандартный image_input
+                if "image_input" in safe_payload["input"]:
+                    safe_payload["input"]["image_input"] = ["<BASE64_IMAGE_DATA_HIDDEN_FOR_SECURITY>"]
+                # Очищаем специфичный для Qwen image_url
+                if "image_url" in safe_payload["input"] and str(safe_payload["input"]["image_url"]).startswith("data:image"):
+                    safe_payload["input"]["image_url"] = "<BASE64_IMAGE_DATA_HIDDEN_FOR_SECURITY>"
         except Exception:
             pass
         return safe_payload
@@ -39,6 +44,7 @@ class KieClient:
 
         create_url = f"{self.base_url}/jobs/createTask"
         
+        # Определяем семейство модели
         model_family = "default"
         model_lower = model.lower()
         
@@ -55,6 +61,7 @@ class KieClient:
         elif "grok" in model_lower:
             model_family = "grok"
 
+        # МАТРИЦА ПАРАМЕТРОВ
         config_matrix = {
             "vertical": {
                 "nano_banana": {"aspect_ratio": "9:16", "resolution": "1K", "output_format": "png"},
@@ -90,29 +97,40 @@ class KieClient:
 
         input_data = {"prompt": prompt, "num_images": 1}
         
+        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный роутинг спецификаций
         if source_image and os.path.exists(source_image):
             try:
                 with open(source_image, "rb") as img_file:
                     encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
                     ext = source_image.split('.')[-1].lower()
                     mime_type = "image/png" if ext == "png" else "image/jpeg"
-                    input_data["image_input"] = [f"data:{mime_type};base64,{encoded_string}"]
-                    logger.info(f"🪄 Img2Img: Прикреплено фото для изменения.")
+                    
+                    if model_family == "qwen_image":
+                        # ⚡️ Qwen требует специальный endpoint для редактирования и строку image_url
+                        model = "qwen/image-edit"
+                        input_data["image_url"] = f"data:{mime_type};base64,{encoded_string}"
+                    else:
+                        # ⚡️ Остальные используют массив image_input
+                        input_data["image_input"] = [f"data:{mime_type};base64,{encoded_string}"]
+                        
+                    logger.info(f"🪄 Img2Img: Прикреплено фото для изменения (Реальная модель: {model})")
             except Exception as e:
                 logger.error(f"❌ KIE Img2Img Error: Не удалось прочитать исходное фото: {e}")
 
+        # Добавляем остальные параметры матрицы
         for key, value in params.items():
             input_data[key] = value
 
         payload = {"model": model, "input": input_data}
         task_id = None
         
+        # Отправка задачи
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
                 async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     data = await resp.json()
                     if data.get("code") != 200:
-                        # 🔥 Защищенный лог без мусора
+                        # Защищенный лог без мусора
                         logger.error(f"❌ KIE Create Task Error: {data} | Payload: {self._sanitize_logs(payload)}")
                         return None, None
                     
@@ -125,6 +143,7 @@ class KieClient:
         if not task_id:
             return None, None
 
+        # Ожидание результата
         query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
         max_attempts = 60
         
@@ -162,6 +181,7 @@ class KieClient:
     # 🎬 ГЕНЕРАЦИЯ ВИДЕО
     # ==========================================
     async def generate_video(self, prompt: str, model: str, ratio: str = "vertical") -> str:
+        """Генерация видео через KIE (Kling 3.0 / Grok Video)"""
         if not self.api_key:
             return None
             
@@ -252,7 +272,7 @@ class KieClient:
             "model": "grok-imagine/upscale",
             "input": {
                 "image_input": image_input,
-                "prompt": "high quality, ultra detailed, masterpiece, 8k resolution" # 🔥 Добавлен промпт, чтобы KIE API не отклонял запрос
+                "prompt": "high quality, ultra detailed, masterpiece, 8k resolution" 
             }
         }
 
@@ -265,7 +285,6 @@ class KieClient:
                         task_id = data.get("data", {}).get("taskId")
                         logger.info(f"✅ KIE Upscale Task Created: {task_id}")
                     else:
-                        # 🔥 Защищенный лог без мусора
                         logger.error(f"❌ KIE Upscale API Error: {data} | Payload: {self._sanitize_logs(payload)}")
                         return None
             except Exception as e:
