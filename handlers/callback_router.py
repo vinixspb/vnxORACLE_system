@@ -157,6 +157,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("img_ratio_"):
         ratio = data.split("_")[2] 
         prompt = context.user_data.get('img_prompt')
+        
+        # 🔥 СБРАСЫВАЕМ РЕЖИМ, чтобы таймер 20с отменился
+        if context.user_data.get('mode') == 'img_ratio_wait':
+            context.user_data['mode'] = None
+            
         if not prompt:
             await query.answer("⚠️ Ошибка: промпт устарел. Начните заново.", show_alert=True)
             return
