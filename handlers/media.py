@@ -1,285 +1,178 @@
-import aiohttp
-import asyncio
-import logging
-import json
 import os
-import base64
+import random
+import uuid
+import logging
+import asyncio
+import urllib.parse
+from telegram import Update
+from telegram.constants import ChatAction
+from telegram.ext import ContextTypes
 import config
+from loader import sheets_mgr
+from keyboards.ai_image import get_post_generation_keyboard, get_photo_action_keyboard
+from services.prompt_censor import is_prompt_safe, clean_prompt
+from services.kie_client import kie_studio 
 
 logger = logging.getLogger(__name__)
+DOWNLOADS_DIR = "downloads"
+if not os.path.exists(DOWNLOADS_DIR):
+    os.makedirs(DOWNLOADS_DIR)
 
-class KieClient:
-    def __init__(self):
-        self.api_key = config.KIE_API_KEY
-        self.base_url = "https://api.kie.ai/api/v1"
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-    # ==========================================
-    # 🖼 ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (И IMG2IMG)
-    # ==========================================
-    async def generate_image(self, prompt: str, model: str, ratio: str = "vertical", source_image: str = None) -> tuple:
-        """Асинхронная генерация изображений (поддерживает Img2Img). Возвращает (image_url, task_id)"""
-        if not self.api_key:
-            logger.error("❌ KIE Client: KIE_API_KEY is missing.")
-            return None, None
-
-        create_url = f"{self.base_url}/jobs/createTask"
-        
-        # Определяем семейство модели
-        model_family = "default"
-        model_lower = model.lower()
-        
-        if "nano-banana" in model_lower:
-            model_family = "nano_banana"
-        elif "qwen-image" in model_lower or "qwen_image" in model_lower:
-            model_family = "qwen_image"  # 🆕 Qwen 2.0
-        elif "gpt-4o-image" in model_lower:
-            model_family = "gpt_4o"
-        elif "flux" in model_lower:
-            model_family = "flux"
-        elif "seedream" in model_lower:
-            model_family = "seedream"
-        elif "grok" in model_lower:
-            model_family = "grok"
-
-        # МАТРИЦА ПАРАМЕТРОВ
-        config_matrix = {
-            "vertical": {
-                "nano_banana": {"aspect_ratio": "9:16", "resolution": "1K", "output_format": "png"},
-                "qwen_image": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30},  
-                "gpt_4o": {},  
-                "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "grok": {"aspect_ratio": "9:16"},
-                "default": {"aspect_ratio": "9:16", "resolution": "1K"}
-            },
-            "horizontal": {
-                "nano_banana": {"aspect_ratio": "16:9", "resolution": "1K", "output_format": "png"},
-                "qwen_image": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30},  
-                "gpt_4o": {},
-                "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "grok": {"aspect_ratio": "16:9"},
-                "default": {"aspect_ratio": "16:9", "resolution": "1K"}
-            },
-            "square": {
-                "nano_banana": {"aspect_ratio": "1:1", "resolution": "1K", "output_format": "png"},
-                "qwen_image": {"image_size": "square", "output_format": "png", "num_inference_steps": 30},  
-                "gpt_4o": {},
-                "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "grok": {"aspect_ratio": "1:1"},
-                "default": {"aspect_ratio": "1:1", "resolution": "1K"}
-            }
-        }
-
-        safe_ratio = ratio if ratio in config_matrix else "vertical"
-        params = config_matrix[safe_ratio].get(model_family, config_matrix[safe_ratio]["default"])
-
-        # Собираем payload
-        input_data = {"prompt": prompt, "num_images": 1}
-        
-        # 🔥 ИНТЕГРАЦИЯ IMG2IMG (Редактирование фото)
-        if source_image and os.path.exists(source_image):
-            try:
-                with open(source_image, "rb") as img_file:
-                    encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
-                    ext = source_image.split('.')[-1].lower()
-                    mime_type = "image/png" if ext == "png" else "image/jpeg"
-                    # KIE API требует передавать картинку массивом image_input
-                    input_data["image_input"] = [f"data:{mime_type};base64,{encoded_string}"]
-                    logger.info(f"🪄 Img2Img: Прикреплено фото для изменения.")
-            except Exception as e:
-                logger.error(f"❌ KIE Img2Img Error: Не удалось прочитать исходное фото: {e}")
-
-        # Добавляем остальные параметры матрицы
-        for key, value in params.items():
-            input_data[key] = value
-
-        payload = {"model": model, "input": input_data}
-        task_id = None
-        
-        # Отправка задачи
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            try:
-                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    data = await resp.json()
-                    if data.get("code") != 200:
-                        logger.error(f"❌ KIE Create Task Error: {data} | Payload: {payload}")
-                        return None, None
-                    
-                    task_id = data.get("data", {}).get("taskId")
-                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model})")
-            except Exception as e:
-                logger.error(f"❌ KIE Network Error: {e}")
-                return None, None
-
-        if not task_id:
-            return None, None
-
-        # Ожидание результата
-        query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
-        max_attempts = 60
-        
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            for attempt in range(max_attempts):
-                await asyncio.sleep(3)
-                try:
-                    async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        result_data = await resp.json()
-                        if result_data.get("code") != 200:
-                            continue
-                            
-                        task_info = result_data.get("data", {})
-                        state = task_info.get("state")
-                        
-                        if state == "success":
-                            result_json_str = task_info.get("resultJson", "{}")
-                            try:
-                                parsed_result = json.loads(result_json_str)
-                                image_url = parsed_result.get("resultUrls", [None])[0]
-                                logger.info(f"🎨 KIE Image Complete! URL: {image_url}")
-                                return image_url, task_id
-                            except json.JSONDecodeError:
-                                return None, None
-                        elif state == "fail":
-                            logger.error(f"❌ KIE Task Failed: {task_info.get('failMsg')}")
-                            return None, None
-                except Exception:
-                    continue
-
-        logger.error(f"❌ KIE Task Timeout")
-        return None, None
-
-    # ==========================================
-    # 🎬 ГЕНЕРАЦИЯ ВИДЕО
-    # ==========================================
-    async def generate_video(self, prompt: str, model: str, ratio: str = "vertical") -> str:
-        """Генерация видео через KIE (Kling 3.0 / Grok Video)"""
-        if not self.api_key:
-            return None
+async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "vertical"):
+    """
+    БРОНЕБОЙНАЯ ГЕНЕРАЦИЯ (KIE AI + Автоматический Fallback на Pollinations)
+    Интегрирована поддержка Img2Img (редактирование по фото)
+    """
+    user_id = update.effective_user.id
+    await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
+    
+    img_model = context.user_data.get('img_model', config.IMG_POLLINATIONS)
+    safe_prompt = clean_prompt(prompt)
+    
+    # Проверяем, не запущен ли режим редактирования (Img2Img)
+    is_img2img = context.user_data.get('img2img_mode', False)
+    source_path = context.user_data.get('img2img_source_path') if is_img2img else None
+    
+    # Сбрасываем флаги, чтобы следующие генерации шли как обычные Text2Img
+    context.user_data['img2img_mode'] = False
+    context.user_data['img2img_source_path'] = None
+    
+    # --- Функция-помощник: Pollinations Fallback ---
+    async def generate_pollinations_fallback(reason_text: str):
+        logger.warning(f"⚠️ Fallback to Pollinations for user {user_id}. Reason: {reason_text}")
+        if ratio == "vertical": w, h = 576, 1024
+        elif ratio == "horizontal": w, h = 1024, 576
+        else: w, h = 1024, 1024
             
-        create_url = f"{self.base_url}/jobs/createTask"
+        enhanced_prompt = f"{safe_prompt}, highly detailed, 8k, cinematic lighting"
         
-        config_matrix = {
-            "vertical": {"aspect_ratio": "9:16", "resolution": "480p"},
-            "horizontal": {"aspect_ratio": "16:9", "resolution": "480p"},
-            "square": {"aspect_ratio": "1:1", "resolution": "480p"}
-        }
-        params = config_matrix.get(ratio, config_matrix["vertical"])
-
-        payload = {
-            "model": model,
-            "input": {
-                "prompt": prompt,
-                "aspect_ratio": params["aspect_ratio"],
-                "mode": "normal",
-                "duration": "6",
-                "resolution": params["resolution"]
-            }
-        }
-
-        task_id = None
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            try:
-                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    data = await resp.json()
-                    if data.get("code") == 200:
-                        task_id = data.get("data", {}).get("taskId")
-                        logger.info(f"✅ KIE Video Task Created: {task_id}")
-                    else:
-                        logger.error(f"❌ KIE Video Task Error: {data} | Payload: {payload}")
-            except Exception as e:
-                logger.error(f"❌ KIE Video Error: {e}")
-                return None
-
-        if not task_id:
-            return None
-
-        query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
+        encoded_prompt = urllib.parse.quote(enhanced_prompt)
+        seed = random.randint(1, 999999)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
         
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            for attempt in range(100):
-                await asyncio.sleep(3)
-                try:
-                    async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        result_data = await resp.json()
-                        if result_data.get("code") != 200:
-                            continue
-                            
-                        state = result_data.get("data", {}).get("state")
-                        if state == "success":
-                            result_json_str = result_data.get("data", {}).get("resultJson", "{}")
-                            try:
-                                parsed = json.loads(result_json_str)
-                                video_url = parsed.get("resultUrls", [None])[0]
-                                logger.info(f"🎬 KIE Video Complete! URL: {video_url}")
-                                return video_url
-                            except:
-                                return None
-                        elif state == "fail":
-                            return None
-                except:
-                    continue
-        return None
-
-    # ==========================================
-    # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (UPSCALE)
-    # ==========================================
-    async def upscale_image(self, original_task_id: str) -> str:
-        if not self.api_key:
-            return None
+        caption_text = f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Fallback)</code>\nPrompt: {safe_prompt}\n\n⚠️ <i>Основная нейросеть временно недоступна, использован резерв.</i>"
+        
+        if is_img2img:
+            caption_text += "\n\n⚠️ <i>Внимание: Режим редактирования фото недоступен в резервном режиме. Сгенерировано полностью новое изображение.</i>"
             
-        create_url = f"{self.base_url}/jobs/createTask"
+        try:
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await context.bot.send_photo(chat_id=user_id, photo=image_url, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
+            else:
+                await update.message.reply_photo(photo=image_url, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
+        except Exception as e:
+            logger.error(f"Pollinations Fallback Error: {e}")
+            await context.bot.send_message(chat_id=user_id, text="⚠️ Критическая ошибка визуализации. Telegram не смог загрузить изображение.")
+
+    # --- 1. ЕСЛИ ВЫБРАН POLLINATIONS ---
+    if img_model == config.IMG_POLLINATIONS:
+        return await generate_pollinations_fallback("User selected free model")
+
+    # --- 2. ГЕНЕРАЦИЯ KIE.AI ---
+    if hasattr(update, 'callback_query') and update.callback_query:
+        msg = await context.bot.send_message(chat_id=user_id, text="⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", parse_mode='HTML')
+    else:
+        msg = await update.message.reply_text("⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", parse_mode='HTML')
+    
+    # 🔥 Отправляем запрос (с source_path, если это редактирование)
+    result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio, source_image=source_path)
+    
+    if result_url:
+        mode_text = "Img2Img" if is_img2img else "Text2Img"
+        caption = f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nMode: {mode_text}\nRatio: {ratio}\nPrompt: {safe_prompt}"
+        try:
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=result_url, 
+                caption=caption, 
+                reply_markup=get_post_generation_keyboard(),
+                parse_mode='HTML'
+            )
+            await msg.delete()
+        except Exception as e:
+            logger.error(f"Telegram Photo Send Error: {e}")
+            await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
+    else:
+        # 🔥 FALLBACK
+        await msg.delete()
+        await generate_pollinations_fallback(f"KIE Error 500 with model {img_model}")
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    mode = context.user_data.get('mode')
+    
+    photo = update.message.photo[-1]
+    caption = update.message.caption or ""
+    
+    file = await context.bot.get_file(photo.file_id)
+    path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"p_{user_id}_{uuid.uuid4().hex[:8]}.jpg"))
+    await file.download_to_drive(path)
+
+    if mode == 'openclaw_wait':
+        from services.openclaw_core import claw_manager
+        user_name = update.effective_user.first_name or "User"
+        msg = await update.message.reply_text("🦞 <i>Агент изучает изображение...</i>", parse_mode='HTML')
         
-        payload = {
-            "model": "grok-imagine/upscale",
-            "input": {"task_id": original_task_id}
-        }
+        injected_prompt = f"{caption}\n\n[SYSTEM: Пользователь прикрепил картинку. Путь: {path}. Опиши её или выполни задачу.]"
+        response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
+        return await msg.edit_text(response, parse_mode='HTML')
 
-        task_id = None
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            try:
-                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    data = await resp.json()
-                    if data.get("code") == 200:
-                        task_id = data.get("data", {}).get("taskId")
-                        logger.info(f"✅ KIE Upscale Task Created: {task_id}")
-            except Exception as e:
-                logger.error(f"❌ KIE Network Error (Upscale): {e}")
-                return None
+    elif mode == 'video_image_wait':
+        context.user_data['last_photo_path'] = path
+        context.user_data['last_photo_caption'] = caption
+        await update.message.reply_text("🎬 <b>Фото получено!</b>\nИнициализация модуля оживления... (Требуется обновление KIE API)", parse_mode='HTML')
+        return
 
-        if not task_id:
-            return None
-
-        query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
+    user_tariff = sheets_mgr.get_user_tariff(user_id)
+    if user_tariff not in ['PRO', 'NEO']:
+        return await update.message.reply_text("🧬 <b>VISION MODULE</b> доступен на уровнях PRO и NEO.", parse_mode='HTML')
         
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            for attempt in range(60):
-                await asyncio.sleep(3)
-                try:
-                    async with session.get(query_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        result_data = await resp.json()
-                        if result_data.get("code") != 200:
-                            continue
-                            
-                        state = result_data.get("data", {}).get("state")
-                        if state == "success":
-                            result_json_str = result_data.get("data", {}).get("resultJson", "{}")
-                            try:
-                                parsed = json.loads(result_json_str)
-                                upscaled_url = parsed.get("resultUrls", [None])[0]
-                                logger.info(f"✨ KIE Upscale Task Completed! URL: {upscaled_url}")
-                                return upscaled_url
-                            except json.JSONDecodeError:
-                                return None
-                        elif state == "fail":
-                            return None
-                except Exception:
-                    continue
-        return None
+    context.user_data['last_photo_path'] = path
+    context.user_data['last_photo_caption'] = caption
+    
+    instruction_text = (
+        "📸 <b>Изображение получено!</b>\n\n"
+        "Выберите действие:\n"
+        "👁 <b>Распознать (Vision)</b>\n"
+        "🪄 <b>Редактировать (Img2Img)</b>\n"
+        "✨ <b>Улучшить (Upscale)</b>"
+    )
+    if caption: instruction_text += f"\n\n<i>Ваш промпт: {caption}</i>"
 
-kie_studio = KieClient()
+    await update.message.reply_text(instruction_text, reply_markup=get_photo_action_keyboard(), parse_mode='HTML')
+
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    mode = context.user_data.get('mode')
+    
+    document = update.message.document
+    caption = update.message.caption or "Изучи этот документ."
+    
+    safe_name = "".join(c for c in document.file_name if c.isalnum() or c in " ._-")
+    
+    file = await context.bot.get_file(document.file_id)
+    path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"d_{user_id}_{safe_name}"))
+    await file.download_to_drive(path)
+
+    if mode == 'openclaw_wait':
+        from services.openclaw_core import claw_manager
+        user_name = update.effective_user.first_name or "User"
+        
+        msg = await update.message.reply_text(f"🦞 <i>Скачал файл {safe_name}. Агент приступил к анализу...</i>", parse_mode='HTML')
+        
+        injected_prompt = (
+            f"{caption}\n\n"
+            f"[SYSTEM COMMAND: Пользователь только что загрузил файл.\n"
+            f"Имя: {document.file_name}\n"
+            f"Абсолютный путь: {path}\n"
+            f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль (не используй cat или вывод всего текста). "
+            f"Если это таблица (Excel/CSV/JSON) или большой документ, напиши и выполни Python-скрипт (например, с использованием pandas), "
+            f"чтобы проанализировать данные локально, и выведи пользователю ТОЛЬКО готовый ответ, аналитику или запрошенную сумму!]"
+        )
+        
+        response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
+        await msg.edit_text(response, parse_mode='HTML')
+    else:
+        await update.message.reply_text(f"📁 <b>Файл сохранен:</b> {safe_name}\nЧтобы я мог сделать выжимку или аналитику, перейдите в меню 🦞 <b>OpenClaw</b> и отправьте его там.", parse_mode='HTML')
