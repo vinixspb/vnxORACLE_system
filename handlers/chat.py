@@ -181,16 +181,21 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =========================================================
     if text.startswith("/img "):
         prompt = text[5:]
-        context.user_data['mode'] = None
+        context.user_data['mode'] = 'img_ratio_wait' # 🔥 Меняем режим для таймера
         context.user_data['vision_mode'] = False 
         context.user_data['img_prompt'] = prompt
         
         from keyboards.ai_image import get_ratio_keyboard
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"📐 <b>Выберите формат изображения:</b>\n\n<i>Промпт: {prompt[:50]}...</i>",
             reply_markup=get_ratio_keyboard(),
             parse_mode='HTML'
         )
+        
+        # 🔥 Запускаем 20-секундный таймер
+        from handlers.media import schedule_auto_ratio
+        import asyncio
+        asyncio.create_task(schedule_auto_ratio(update, context, prompt, msg.message_id))
         return
 
     # =========================================================
@@ -200,23 +205,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if mode == 'openclaw_wait':
         from services.messages import get_wait_message, DynamicWaitMessage
-        
         prefix = "🦞 <b>Агент ищет информацию...</b>\n"
         wait_msg = await update.message.reply_text(f"{prefix}{get_wait_message('text')}", parse_mode='HTML')
         
-        # 🔥 Запускаем анимацию
         loader = DynamicWaitMessage(wait_msg, "text", prefix)
         loader.start()
-        
         from services.openclaw_core import claw_manager
-        
         user_tariff = sheets_mgr.get_user_tariff(user_id)
-        if user_tariff == 'NEO':
-            b_key = config.BRAVE_API_KEY_NEO
-        elif user_tariff == 'PRO':
-            b_key = config.BRAVE_API_KEY_PRO
-        else:
-            b_key = config.BRAVE_API_KEY_START
+        b_key = config.BRAVE_API_KEY_NEO if user_tariff == 'NEO' else config.BRAVE_API_KEY_PRO if user_tariff == 'PRO' else config.BRAVE_API_KEY_START
 
         try:
             if text.lower() in ['статус', 'status', 'ping']:
@@ -224,16 +220,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 ans = await claw_manager.execute_task(text, user_id, update.effective_user.full_name, brave_key=b_key)
         finally:
-            loader.stop() # Обязательно останавливаем при любом исходе
+            loader.stop() 
             
-        try:
-            await wait_msg.edit_text(ans, parse_mode='HTML')
+        try: await wait_msg.edit_text(ans, parse_mode='HTML')
         except Exception as e:
-            logger.warning(f"⚠️ Telegram Timeout: {e}")
-            try:
-                await update.message.reply_text(ans, parse_mode='HTML')
-            except Exception as e2:
-                logger.error(f"❌ Критический сбой: {e2}")
+            try: await update.message.reply_text(ans, parse_mode='HTML')
+            except Exception as e2: pass
         return
 
     # 🪄 РЕЖИМ IMG2IMG (РЕДАКТИРОВАНИЕ ФОТО)
@@ -244,36 +236,45 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         source_path = context.user_data.get('img2img_source_path')
-        
         if not source_path or not os.path.exists(source_path):
             await update.message.reply_text("⚠️ Исходное фото потеряно. Загрузите новое.", parse_mode='HTML')
             context.user_data['mode'] = None
             return
         
-        context.user_data['mode'] = None
+        context.user_data['mode'] = 'img_ratio_wait' # 🔥 Ставим режим для таймера
         context.user_data['img_prompt'] = text
         context.user_data['img2img_mode'] = True
         
         from keyboards.ai_image import get_ratio_keyboard
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"📐 <b>Выберите формат результата:</b>\n\n<i>Изменение: {text[:50]}...</i>",
             reply_markup=get_ratio_keyboard(),
             parse_mode='HTML'
         )
+        
+        # 🔥 Запускаем 20-секундный таймер
+        from handlers.media import schedule_auto_ratio
+        import asyncio
+        asyncio.create_task(schedule_auto_ratio(update, context, text, msg.message_id))
         return
         
     # 🎨 РЕЖИМ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (ОЖИДАНИЕ ПРОМПТА ИЗ КНОПКИ)
     if mode == 'img_wait':
         prompt = text
-        context.user_data['mode'] = None
+        context.user_data['mode'] = 'img_ratio_wait' # 🔥 Ставим режим для таймера
         context.user_data['img_prompt'] = prompt
         
         from keyboards.ai_image import get_ratio_keyboard
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"📐 <b>Выберите формат изображения:</b>\n\n<i>Промпт: {prompt[:50]}...</i>",
             reply_markup=get_ratio_keyboard(),
             parse_mode='HTML'
         )
+        
+        # 🔥 Запускаем 20-секундный таймер
+        from handlers.media import schedule_auto_ratio
+        import asyncio
+        asyncio.create_task(schedule_auto_ratio(update, context, prompt, msg.message_id))
         return
 
     # 🎬 РЕЖИМ ГЕНЕРАЦИИ ВИДЕО ПО ТЕКСТУ
