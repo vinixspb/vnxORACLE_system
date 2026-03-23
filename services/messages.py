@@ -97,30 +97,35 @@ class DynamicWaitMessage:
         self.media_type = media_type
         self.prefix = prefix
         self._task = None
-        
-        # 🔥 Прямые ссылки на бота и чат для надежного обновления
-        self.bot = message.get_bot()
         self.chat_id = message.chat_id
         self.message_id = message.message_id
+        self.last_text = ""
 
     async def _update_loop(self):
+        bot = self.message.get_bot()
         try:
             while True:
-                await asyncio.sleep(4)  # 🔥 Меняем шутку каждые 4 секунды
+                await asyncio.sleep(4)  # 🔥 Меняем шутку ровно каждые 4 секунды
+                
                 new_text = f"{self.prefix}{get_wait_message(self.media_type)}"
+                # 🔥 Жесткая защита от повторов: крутим рулетку, пока не выпадет новая шутка
+                while new_text == self.last_text:
+                    new_text = f"{self.prefix}{get_wait_message(self.media_type)}"
+                
+                self.last_text = new_text
+                
                 try:
-                    await self.bot.edit_message_text(
+                    await bot.edit_message_text(
                         chat_id=self.chat_id,
                         message_id=self.message_id,
                         text=new_text,
                         parse_mode='HTML'
                     )
                 except Exception as e:
-                    # Игнорируем ошибку, если рандом выдал ту же самую шутку
                     if "Message is not modified" not in str(e):
                         logger.warning(f"WaitMsg Edit Error: {e}")
         except asyncio.CancelledError:
-            pass # Нормальное завершение
+            pass # Нормальное завершение задачи
 
     def start(self):
         if self.message:
