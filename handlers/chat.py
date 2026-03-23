@@ -199,7 +199,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = context.user_data.get('mode')
     
     if mode == 'openclaw_wait':
-        wait_msg = await update.message.reply_text("🦞 <i>Агент принял задачу...</i>", parse_mode='HTML')
+        from services.messages import get_wait_message
+        wait_text = get_wait_message("text")
+        wait_msg = await update.message.reply_text(wait_text, parse_mode='HTML')
+        
         from services.openclaw_core import claw_manager
         
         user_tariff = sheets_mgr.get_user_tariff(user_id)
