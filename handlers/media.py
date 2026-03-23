@@ -13,6 +13,7 @@ from loader import sheets_mgr
 from keyboards.ai_image import get_post_generation_keyboard, get_photo_action_keyboard
 from services.prompt_censor import clean_prompt
 from services.kie_client import kie_studio 
+from services.messages import get_wait_message  # 🔥 Интегрируем наши фразы
 
 logger = logging.getLogger(__name__)
 DOWNLOADS_DIR = "downloads"
@@ -60,7 +61,6 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         if is_img2img:
             caption_text += "\n\n⚠️ <i>Внимание: Режим редактирования фото недоступен в резервном режиме. Сгенерировано полностью новое изображение.</i>"
             
-        # 🔥 ИСПРАВЛЕНИЕ: Скачиваем файл в память, чтобы избежать ошибки "Failed to get http url content"
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
@@ -82,12 +82,15 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         return await generate_pollinations_fallback("User selected free model")
 
     # --- 2. ГЕНЕРАЦИЯ KIE.AI ---
-    if hasattr(update, 'callback_query') and update.callback_query:
-        msg = await context.bot.send_message(chat_id=user_id, text="⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", parse_mode='HTML')
-    else:
-        msg = await update.message.reply_text("⏳ <i>Инициализация нейросети... Задача поставлена в очередь.</i>", parse_mode='HTML')
+    # 🔥 Используем наши смешные фразы
+    wait_text = get_wait_message("image")
     
-    # 🔥 Отправляем запрос (с source_path, если это редактирование)
+    if hasattr(update, 'callback_query') and update.callback_query:
+        msg = await context.bot.send_message(chat_id=user_id, text=wait_text, parse_mode='HTML')
+    else:
+        msg = await update.message.reply_text(wait_text, parse_mode='HTML')
+    
+    # Отправляем запрос (с source_path, если это редактирование)
     result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio, source_image=source_path)
     
     if result_url:
@@ -106,7 +109,6 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                         with open(local_path, 'wb') as f:
                             f.write(await resp.read())
                         
-                        # Сохраняем путь к скачанному файлу в память юзера!
                         context.user_data['last_photo_path'] = local_path
                         context.user_data['last_photo_caption'] = safe_prompt
                         logger.info(f"✅ Успешно скачали сгенерированное фото: {local_path}")
@@ -115,7 +117,6 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
 
         # Отправляем фото пользователю
         try:
-            # Отправляем локальный файл, чтобы избежать ошибки URL от Telegram
             if local_path:
                 with open(local_path, 'rb') as photo_to_send:
                     await context.bot.send_photo(
@@ -158,7 +159,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if mode == 'openclaw_wait':
         from services.openclaw_core import claw_manager
         user_name = update.effective_user.first_name or "User"
-        msg = await update.message.reply_text("🦞 <i>Агент изучает изображение...</i>", parse_mode='HTML')
+        
+        wait_text = get_wait_message("text")
+        msg = await update.message.reply_text(wait_text, parse_mode='HTML')
         
         injected_prompt = f"{caption}\n\n[SYSTEM: Пользователь прикрепил картинку. Путь: {path}. Опиши её или выполни задачу.]"
         response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
@@ -167,7 +170,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif mode == 'video_image_wait':
         context.user_data['last_photo_path'] = path
         context.user_data['last_photo_caption'] = caption
-        await update.message.reply_text("🎬 <b>Фото получено!</b>\nИнициализация модуля оживления... (Требуется обновление KIE API)", parse_mode='HTML')
+        await update.message.reply_text(get_wait_message("video"), parse_mode='HTML')
         return
 
     user_tariff = sheets_mgr.get_user_tariff(user_id)
@@ -206,7 +209,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from services.openclaw_core import claw_manager
         user_name = update.effective_user.first_name or "User"
         
-        msg = await update.message.reply_text(f"🦞 <i>Скачал файл {safe_name}. Агент приступил к анализу...</i>", parse_mode='HTML')
+        wait_text = get_wait_message("text")
+        msg = await update.message.reply_text(wait_text, parse_mode='HTML')
         
         injected_prompt = (
             f"{caption}\n\n"
