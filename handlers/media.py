@@ -37,6 +37,11 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     # Сбрасываем флаги, чтобы следующие генерации шли как обычные Text2Img
     context.user_data['img2img_mode'] = False
     context.user_data['img2img_source_path'] = None
+
+    # 🔥 УМНЫЙ РОУТИНГ: Если это редактирование, а модель не поддерживает Img2Img, переключаем на Qwen 2.0
+    if is_img2img and ("nano-banana" in img_model.lower() or "seedream" in img_model.lower()):
+        logger.info(f"🔄 Auto-Switch: Модель {img_model} не поддерживает Img2Img. Переключение на Qwen 2.0")
+        img_model = getattr(config, 'IMG_QWEN_2', "qwen-image-2")
     
     # --- Функция-помощник: Pollinations Fallback ---
     async def generate_pollinations_fallback(reason_text: str):
@@ -46,7 +51,6 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         else: w, h = 1024, 1024
             
         enhanced_prompt = f"{safe_prompt}, highly detailed, 8k, cinematic lighting"
-        
         encoded_prompt = urllib.parse.quote(enhanced_prompt)
         seed = random.randint(1, 999999)
         image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
@@ -56,11 +60,19 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         if is_img2img:
             caption_text += "\n\n⚠️ <i>Внимание: Режим редактирования фото недоступен в резервном режиме. Сгенерировано полностью новое изображение.</i>"
             
+        # 🔥 ИСПРАВЛЕНИЕ: Скачиваем файл в память, чтобы избежать ошибки "Failed to get http url content"
         try:
-            if hasattr(update, 'callback_query') and update.callback_query:
-                await context.bot.send_photo(chat_id=user_id, photo=image_url, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
-            else:
-                await update.message.reply_photo(photo=image_url, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                    if resp.status == 200:
+                        image_data = await resp.read()
+                        
+                        if hasattr(update, 'callback_query') and update.callback_query:
+                            await context.bot.send_photo(chat_id=user_id, photo=image_data, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
+                        else:
+                            await update.message.reply_photo(photo=image_data, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
+                    else:
+                        raise Exception(f"HTTP Status {resp.status}")
         except Exception as e:
             logger.error(f"Pollinations Fallback Error: {e}")
             await context.bot.send_message(chat_id=user_id, text="⚠️ Критическая ошибка визуализации. Telegram не смог загрузить изображение.")
