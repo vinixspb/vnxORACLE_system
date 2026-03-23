@@ -258,6 +258,9 @@ class KieClient:
                     if data.get("code") == 200:
                         task_id = data.get("data", {}).get("taskId")
                         logger.info(f"✅ KIE Upscale Task Created: {task_id}")
+                    else:
+                        logger.error(f"❌ KIE Upscale API Error: {data} | Payload: {payload}")
+                        return None
             except Exception as e:
                 logger.error(f"❌ KIE Network Error (Upscale): {e}")
                 return None
