@@ -229,15 +229,25 @@ class KieClient:
     # ==========================================
     # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (UPSCALE)
     # ==========================================
-    async def upscale_image(self, original_task_id: str) -> str:
-        if not self.api_key:
+    async def upscale_image(self, source_image: str) -> str:
+        if not self.api_key or not source_image or not os.path.exists(source_image):
             return None
             
         create_url = f"{self.base_url}/jobs/createTask"
         
+        try:
+            with open(source_image, "rb") as img_file:
+                encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
+                ext = source_image.split('.')[-1].lower()
+                mime_type = "image/png" if ext == "png" else "image/jpeg"
+                image_input = [f"data:{mime_type};base64,{encoded_string}"]
+        except Exception as e:
+            logger.error(f"❌ KIE Upscale Error: Не удалось прочитать фото: {e}")
+            return None
+
         payload = {
             "model": "grok-imagine/upscale",
-            "input": {"task_id": original_task_id}
+            "input": {"image_input": image_input}
         }
 
         task_id = None
