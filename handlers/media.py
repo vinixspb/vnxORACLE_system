@@ -20,6 +20,28 @@ DOWNLOADS_DIR = "downloads"
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
 
+# =========================================================
+# ⏱ ТАЙМЕР АВТОВЫБОРА 20 СЕКУНД
+# =========================================================
+async def schedule_auto_ratio(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, message_id: int):
+    """Ждет 20 секунд. Если формат не выбран, автоматически запускает вертикальный."""
+    await asyncio.sleep(20)
+    # Если режим все еще 'img_ratio_wait', значит пользователь ничего не нажал
+    if context.user_data.get('mode') == 'img_ratio_wait' and context.user_data.get('img_prompt') == prompt:
+        context.user_data['mode'] = None # Сбрасываем, чтобы избежать дублей
+        chat_id = update.effective_chat.id
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=f"⏱ <i>Время выбора истекло. Автовыбор: <b>Вертикальный (9:16)</b></i>\n\n<i>Промпт: {prompt[:50]}...</i>",
+                parse_mode='HTML'
+            )
+        except Exception:
+            pass
+        # Запускаем генерацию
+        await generate_image(update, context, prompt, "vertical")
+
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "vertical"):
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
@@ -33,7 +55,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     context.user_data['img2img_mode'] = False
     context.user_data['img2img_source_path'] = None
 
-    # 🔥 ВОЗВРАЩАЕМ QWEN: Теперь мы отправляем правильные форматы файлов, и Qwen будет работать идеально!
+    # 🔥 ВОЗВРАЩАЕМ QWEN: Telegraph-ссылки работают безотказно!
     if is_img2img and ("nano-banana" in img_model.lower() or "seedream" in img_model.lower() or "flux" in img_model.lower()):
         logger.info(f"🔄 Auto-Switch: Модель {img_model} перенаправлена на Qwen 2.0 (image-edit).")
         img_model = getattr(config, 'IMG_QWEN_2', "qwen-image-2")
@@ -52,7 +74,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         caption_text = f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Fallback)</code>\nPrompt: {safe_prompt}\n\n⚠️ <i>Основная нейросеть временно недоступна, использован резерв.</i>"
         
         if is_img2img:
-            caption_text += "\n\n⚠️ <i>Внимание: Режим редактирования фото недоступен в резервном режиме. Сгенерировано полностью новое изображение.</i>"
+            caption_text += "\n\n⚠️ <i>Внимание: Режим редактирования недоступен в резервном режиме.</i>"
             
         try:
             async with aiohttp.ClientSession() as session:
@@ -96,13 +118,11 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             async with aiohttp.ClientSession() as session:
                 async with session.get(result_url) as resp:
                     if resp.status == 200:
-                        # 🔥 ГЕНИАЛЬНЫЙ ФИКС: Читаем реальное расширение файла из URL, чтобы не обманывать сервер!
                         ext = "jpg"
                         try:
                             parsed_url = urllib.parse.urlparse(result_url)
                             file_ext = os.path.splitext(parsed_url.path)[1].replace('.', '').lower()
-                            if file_ext in ['jpg', 'jpeg', 'png', 'webp']:
-                                ext = file_ext
+                            if file_ext in ['jpg', 'jpeg', 'png', 'webp']: ext = file_ext
                         except: pass
                         
                         local_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"))
@@ -125,12 +145,9 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                     chat_id=user_id, photo=result_url, caption=caption, 
                     reply_markup=get_post_generation_keyboard(), parse_mode='HTML'
                 )
-            
             try: await msg.delete()
             except: pass
-            
         except Exception as e:
-            logger.error(f"Telegram Photo Send Error: {e}")
             await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
     else:
         try: await msg.delete() 
@@ -145,7 +162,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     caption = update.message.caption or ""
     
-    # Фото из Telegram всегда приходят в JPG, тут всё безопасно
     file = await context.bot.get_file(photo.file_id)
     path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"p_{user_id}_{uuid.uuid4().hex[:8]}.jpg"))
     await file.download_to_drive(path)
@@ -166,10 +182,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         finally:
             loader.stop()
             
-        try:
-            await msg.edit_text(response, parse_mode='HTML')
-        except:
-            await update.message.reply_text(response, parse_mode='HTML')
+        try: await msg.edit_text(response, parse_mode='HTML')
+        except: await update.message.reply_text(response, parse_mode='HTML')
         return
 
     elif mode == 'video_image_wait':
@@ -196,14 +210,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(instruction_text, reply_markup=get_photo_action_keyboard(), parse_mode='HTML')
 
-
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     mode = context.user_data.get('mode')
     
     document = update.message.document
     caption = update.message.caption or "Изучи этот документ."
-    
     raw_name = document.file_name if document.file_name else f"doc_{uuid.uuid4().hex[:6]}"
     safe_name = "".join(c for c in raw_name if c.isalnum() or c in " ._-")
     
@@ -217,7 +229,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         prefix = f"🦞 <b>Файл загружен. Агент анализирует данные...</b>\n"
         msg = await update.message.reply_text(f"{prefix}{get_wait_message('text')}", parse_mode='HTML')
-        
         loader = DynamicWaitMessage(msg, "text", prefix)
         loader.start()
         
@@ -227,17 +238,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"[SYSTEM COMMAND: Пользователь только что загрузил файл.\n"
                 f"Имя: {safe_name}\n"
                 f"Абсолютный путь: {path}\n"
-                f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль (не используй cat или вывод всего текста). "
-                f"Если это таблица (Excel/CSV/JSON) или большой документ, напиши и выполни Python-скрипт (например, с использованием pandas), "
-                f"чтобы проанализировать данные локально, и выведи пользователю ТОЛЬКО готовый ответ, аналитику или запрошенную сумму!]"
+                f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль. Проанализируй данные скриптом и выведи ответ.]"
             )
             response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
         finally:
             loader.stop()
             
-        try:
-            await msg.edit_text(response, parse_mode='HTML')
-        except:
-            await update.message.reply_text(response, parse_mode='HTML')
+        try: await msg.edit_text(response, parse_mode='HTML')
+        except: await update.message.reply_text(response, parse_mode='HTML')
     else:
         await update.message.reply_text(f"📁 <b>Файл сохранен:</b> {safe_name}\nЧтобы я мог сделать выжимку или аналитику, перейдите в меню 🦞 <b>OpenClaw</b> и отправьте его там.", parse_mode='HTML')
