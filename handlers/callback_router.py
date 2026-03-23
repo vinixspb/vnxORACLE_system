@@ -198,14 +198,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = 'img2img_wait'
         context.user_data['img2img_source_path'] = path  # Сохраняем путь к исходному фото
         
-        await query.message.edit_text(
-            "🪄 <b>Режим редактирования активирован!</b>\n\n"
-            "Напишите, что нужно изменить на фото.\n\n"
-            "Примеры:\n"
-            "• 'Сделай небо синим'\n"
-            "• 'Добавь радугу'\n"
-            "• 'Измени цвет машины на красный'\n\n"
-            "💡 <i>Для выхода напишите 'отмена'</i>",
+        # 🔥 ИСПРАВЛЕНИЕ: Удаляем фото, отправляем текст (нельзя делать edit_text на фото)
+        try:
+            await query.message.delete()
+        except:
+            pass
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🪄 <b>Режим редактирования активирован!</b>\n\nНапишите, что нужно изменить на фото.\n\nПримеры:\n• 'Сделай небо синим'\n• 'Добавь радугу'\n• 'Измени цвет машины на красный'\n\n💡 <i>Для выхода напишите 'отмена'</i>",
             parse_mode='HTML'
         )
 
@@ -216,12 +217,33 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
             return
         
-        await query.message.delete()
-        await query.message.reply_text(
-            "✨ <b>Улучшение качества...</b>\n"
-            "<i>Модуль Upscale (Grok) сейчас интегрируется в Ядро. Скоро будет доступен!</i>",
+        # 🔥 ИСПРАВЛЕНИЕ: Удаляем старое фото, запускаем реальный процесс Upscale
+        try:
+            await query.message.delete()
+        except:
+            pass
+            
+        wait_msg = await context.bot.send_message(
+            chat_id=user_id,
+            text="✨ <b>Улучшение качества...</b>\n<i>Нейросеть обрабатывает детали. Это может занять около минуты.</i>",
             parse_mode='HTML'
         )
+        
+        from services.kie_client import kie_studio
+        upscaled_url = await kie_studio.upscale_image(path)
+        
+        if upscaled_url:
+            from keyboards.ai_image import get_post_generation_keyboard
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=upscaled_url,
+                caption="✨ <b>Качество успешно улучшено! (Upscaled)</b>",
+                reply_markup=get_post_generation_keyboard(),
+                parse_mode='HTML'
+            )
+            await wait_msg.delete()
+        else:
+            await wait_msg.edit_text("❌ Ошибка Upscale. Нейросеть отклонила запрос. Проверьте логи.")
 
     # =========================================================
     # 📐 ВЫБОР ФОРМАТА ИЗОБРАЖЕНИЯ И ЗАПУСК ГЕНЕРАЦИИ
