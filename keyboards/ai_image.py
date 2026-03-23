@@ -43,6 +43,8 @@ def get_post_generation_keyboard() -> InlineKeyboardMarkup:
     Клавиатура, которая прикрепляется под готовым сгенерированным изображением.
     """
     keyboard = [
+        [InlineKeyboardButton("🪄 Редактировать", callback_data="photo_edit"),
+         InlineKeyboardButton("✨ Улучшить", callback_data="photo_upscale")],
         [InlineKeyboardButton("🔄 Новая генерация", callback_data="feature_design")],
         [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_features")]
     ]
