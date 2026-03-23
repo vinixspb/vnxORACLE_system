@@ -13,7 +13,7 @@ from loader import sheets_mgr
 from keyboards.ai_image import get_post_generation_keyboard, get_photo_action_keyboard
 from services.prompt_censor import clean_prompt
 from services.kie_client import kie_studio 
-from services.messages import get_wait_message  # 🔥 Интегрируем наши фразы
+from services.messages import get_wait_message, DynamicWaitMessage
 
 logger = logging.getLogger(__name__)
 DOWNLOADS_DIR = "downloads"
@@ -21,30 +21,23 @@ if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
 
 async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, ratio: str = "vertical"):
-    """
-    БРОНЕБОЙНАЯ ГЕНЕРАЦИЯ (KIE AI + Автоматический Fallback на Pollinations)
-    Интегрирована поддержка Img2Img и авто-сохранения для Upscale.
-    """
     user_id = update.effective_user.id
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.UPLOAD_PHOTO)
     
     img_model = context.user_data.get('img_model', config.IMG_POLLINATIONS)
     safe_prompt = clean_prompt(prompt)
     
-    # Проверяем, не запущен ли режим редактирования (Img2Img)
     is_img2img = context.user_data.get('img2img_mode', False)
     source_path = context.user_data.get('img2img_source_path') if is_img2img else None
     
-    # Сбрасываем флаги, чтобы следующие генерации шли как обычные Text2Img
     context.user_data['img2img_mode'] = False
     context.user_data['img2img_source_path'] = None
 
-    # 🔥 УМНЫЙ РОУТИНГ: Если это редактирование, а модель не поддерживает Img2Img, переключаем на Qwen 2.0
-    if is_img2img and ("nano-banana" in img_model.lower() or "seedream" in img_model.lower()):
-        logger.info(f"🔄 Auto-Switch: Модель {img_model} не поддерживает Img2Img. Переключение на Qwen 2.0")
-        img_model = getattr(config, 'IMG_QWEN_2', "qwen-image-2")
+    # 🔥 ИСПРАВЛЕНИЕ: Qwen требует URL. Поэтому если это редактирование, переключаемся на безотказный Flux Pro
+    if is_img2img and ("nano-banana" in img_model.lower() or "seedream" in img_model.lower() or "qwen" in img_model.lower()):
+        logger.info(f"🔄 Auto-Switch: Модель {img_model} конфликтует с Img2Img. Переключение на Flux Pro.")
+        img_model = getattr(config, 'IMG_FLUX_SCHNELL', "flux-2/pro-text-to-image")
     
-    # --- Функция-помощник: Pollinations Fallback ---
     async def generate_pollinations_fallback(reason_text: str):
         logger.warning(f"⚠️ Fallback to Pollinations for user {user_id}. Reason: {reason_text}")
         if ratio == "vertical": w, h = 576, 1024
@@ -66,7 +59,6 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                 async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                     if resp.status == 200:
                         image_data = await resp.read()
-                        
                         if hasattr(update, 'callback_query') and update.callback_query:
                             await context.bot.send_photo(chat_id=user_id, photo=image_data, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
                         else:
@@ -75,31 +67,29 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                         raise Exception(f"HTTP Status {resp.status}")
         except Exception as e:
             logger.error(f"Pollinations Fallback Error: {e}")
-            await context.bot.send_message(chat_id=user_id, text="⚠️ Критическая ошибка визуализации. Telegram не смог загрузить изображение.")
+            await context.bot.send_message(chat_id=user_id, text="⚠️ <b>Сбой нейросети:</b> Невозможно сгенерировать данный промпт.", parse_mode='HTML')
 
-    # --- 1. ЕСЛИ ВЫБРАН POLLINATIONS ---
     if img_model == config.IMG_POLLINATIONS:
         return await generate_pollinations_fallback("User selected free model")
 
-    # --- 2. ГЕНЕРАЦИЯ KIE.AI ---
-    # 🔥 Используем наши динамические фразы ожидания
     wait_text = get_wait_message("image")
-    
     if hasattr(update, 'callback_query') and update.callback_query:
         msg = await context.bot.send_message(chat_id=user_id, text=wait_text, parse_mode='HTML')
     else:
         msg = await update.message.reply_text(wait_text, parse_mode='HTML')
+        
+    loader = DynamicWaitMessage(msg, "image")
+    loader.start()
     
-    # Отправляем запрос (с source_path, если это редактирование)
-    result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio, source_image=source_path)
+    try:
+        result_url, task_id = await kie_studio.generate_image(safe_prompt, img_model, ratio, source_image=source_path)
+    finally:
+        loader.stop()
     
     if result_url:
         mode_text = "Img2Img" if is_img2img else "Text2Img"
         caption = f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>{img_model}</code>\nMode: {mode_text}\nRatio: {ratio}\nPrompt: {safe_prompt}"
         
-        # =========================================================
-        # 🔥 АВТО-СКАЧИВАНИЕ ФОТО В КЭШ (Для кнопок Upscale и Img2Img)
-        # =========================================================
         local_path = None
         try:
             async with aiohttp.ClientSession() as session:
@@ -108,44 +98,31 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                         local_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.jpg"))
                         with open(local_path, 'wb') as f:
                             f.write(await resp.read())
-                        
                         context.user_data['last_photo_path'] = local_path
                         context.user_data['last_photo_caption'] = safe_prompt
-                        logger.info(f"✅ Успешно скачали сгенерированное фото: {local_path}")
         except Exception as e:
             logger.error(f"❌ Ошибка скачивания сгенерированного фото: {e}")
 
-        # Отправляем фото пользователю
         try:
             if local_path:
                 with open(local_path, 'rb') as photo_to_send:
                     await context.bot.send_photo(
-                        chat_id=user_id,
-                        photo=photo_to_send, 
-                        caption=caption, 
-                        reply_markup=get_post_generation_keyboard(),
-                        parse_mode='HTML'
+                        chat_id=user_id, photo=photo_to_send, caption=caption, 
+                        reply_markup=get_post_generation_keyboard(), parse_mode='HTML'
                     )
             else:
                 await context.bot.send_photo(
-                    chat_id=user_id,
-                    photo=result_url, 
-                    caption=caption, 
-                    reply_markup=get_post_generation_keyboard(),
-                    parse_mode='HTML'
+                    chat_id=user_id, photo=result_url, caption=caption, 
+                    reply_markup=get_post_generation_keyboard(), parse_mode='HTML'
                 )
             
-            # Удаляем сообщение с фразой ожидания (защита от краша)
-            try:
-                await msg.delete()
-            except Exception as e:
-                logger.warning(f"Не удалось удалить сообщение ожидания: {e}")
+            try: await msg.delete()
+            except: pass
             
         except Exception as e:
             logger.error(f"Telegram Photo Send Error: {e}")
             await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
     else:
-        # 🔥 FALLBACK
         try: await msg.delete() 
         except: pass
         await generate_pollinations_fallback(f"KIE Error 500 with model {img_model}")
@@ -166,12 +143,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from services.openclaw_core import claw_manager
         user_name = update.effective_user.first_name or "User"
         
-        wait_text = get_wait_message("text")
-        msg = await update.message.reply_text(wait_text, parse_mode='HTML')
+        prefix = "🦞 <b>Агент изучает изображение...</b>\n"
+        msg = await update.message.reply_text(f"{prefix}{get_wait_message('text')}", parse_mode='HTML')
         
-        injected_prompt = f"{caption}\n\n[SYSTEM: Пользователь прикрепил картинку. Путь: {path}. Опиши её или выполни задачу.]"
-        response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
+        loader = DynamicWaitMessage(msg, "text", prefix)
+        loader.start()
         
+        try:
+            injected_prompt = f"{caption}\n\n[SYSTEM: Пользователь прикрепил картинку. Путь: {path}. Опиши её или выполни задачу.]"
+            response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
+        finally:
+            loader.stop()
+            
         try:
             await msg.edit_text(response, parse_mode='HTML')
         except:
@@ -210,7 +193,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
     caption = update.message.caption or "Изучи этот документ."
     
-    # 🔥 ИСПРАВЛЕНИЕ БЕЗОПАСНОСТИ: Защита от безымянных файлов
     raw_name = document.file_name if document.file_name else f"doc_{uuid.uuid4().hex[:6]}"
     safe_name = "".join(c for c in raw_name if c.isalnum() or c in " ._-")
     
@@ -222,20 +204,26 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from services.openclaw_core import claw_manager
         user_name = update.effective_user.first_name or "User"
         
-        wait_text = get_wait_message("text")
-        msg = await update.message.reply_text(wait_text, parse_mode='HTML')
+        prefix = f"🦞 <b>Файл загружен. Агент анализирует данные...</b>\n"
+        msg = await update.message.reply_text(f"{prefix}{get_wait_message('text')}", parse_mode='HTML')
         
-        injected_prompt = (
-            f"{caption}\n\n"
-            f"[SYSTEM COMMAND: Пользователь только что загрузил файл.\n"
-            f"Имя: {safe_name}\n"
-            f"Абсолютный путь: {path}\n"
-            f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль (не используй cat или вывод всего текста). "
-            f"Если это таблица (Excel/CSV/JSON) или большой документ, напиши и выполни Python-скрипт (например, с использованием pandas), "
-            f"чтобы проанализировать данные локально, и выведи пользователю ТОЛЬКО готовый ответ, аналитику или запрошенную сумму!]"
-        )
+        loader = DynamicWaitMessage(msg, "text", prefix)
+        loader.start()
         
-        response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
+        try:
+            injected_prompt = (
+                f"{caption}\n\n"
+                f"[SYSTEM COMMAND: Пользователь только что загрузил файл.\n"
+                f"Имя: {safe_name}\n"
+                f"Абсолютный путь: {path}\n"
+                f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль (не используй cat или вывод всего текста). "
+                f"Если это таблица (Excel/CSV/JSON) или большой документ, напиши и выполни Python-скрипт (например, с использованием pandas), "
+                f"чтобы проанализировать данные локально, и выведи пользователю ТОЛЬКО готовый ответ, аналитику или запрошенную сумму!]"
+            )
+            response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
+        finally:
+            loader.stop()
+            
         try:
             await msg.edit_text(response, parse_mode='HTML')
         except:
