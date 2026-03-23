@@ -82,7 +82,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         return await generate_pollinations_fallback("User selected free model")
 
     # --- 2. ГЕНЕРАЦИЯ KIE.AI ---
-    # 🔥 Используем наши смешные фразы
+    # 🔥 Используем наши динамические фразы ожидания
     wait_text = get_wait_message("image")
     
     if hasattr(update, 'callback_query') and update.callback_query:
@@ -134,14 +134,20 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                     reply_markup=get_post_generation_keyboard(),
                     parse_mode='HTML'
                 )
-            await msg.delete()
+            
+            # Удаляем сообщение с фразой ожидания (защита от краша)
+            try:
+                await msg.delete()
+            except Exception as e:
+                logger.warning(f"Не удалось удалить сообщение ожидания: {e}")
             
         except Exception as e:
             logger.error(f"Telegram Photo Send Error: {e}")
             await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
     else:
         # 🔥 FALLBACK
-        await msg.delete()
+        try: await msg.delete() 
+        except: pass
         await generate_pollinations_fallback(f"KIE Error 500 with model {img_model}")
 
 
@@ -165,7 +171,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         injected_prompt = f"{caption}\n\n[SYSTEM: Пользователь прикрепил картинку. Путь: {path}. Опиши её или выполни задачу.]"
         response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
-        return await msg.edit_text(response, parse_mode='HTML')
+        
+        try:
+            await msg.edit_text(response, parse_mode='HTML')
+        except:
+            await update.message.reply_text(response, parse_mode='HTML')
+        return
 
     elif mode == 'video_image_wait':
         context.user_data['last_photo_path'] = path
@@ -199,7 +210,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
     caption = update.message.caption or "Изучи этот документ."
     
-    safe_name = "".join(c for c in document.file_name if c.isalnum() or c in " ._-")
+    # 🔥 ИСПРАВЛЕНИЕ БЕЗОПАСНОСТИ: Защита от безымянных файлов
+    raw_name = document.file_name if document.file_name else f"doc_{uuid.uuid4().hex[:6]}"
+    safe_name = "".join(c for c in raw_name if c.isalnum() or c in " ._-")
     
     file = await context.bot.get_file(document.file_id)
     path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"d_{user_id}_{safe_name}"))
@@ -215,7 +228,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         injected_prompt = (
             f"{caption}\n\n"
             f"[SYSTEM COMMAND: Пользователь только что загрузил файл.\n"
-            f"Имя: {document.file_name}\n"
+            f"Имя: {safe_name}\n"
             f"Абсолютный путь: {path}\n"
             f"КРИТИЧЕСКОЕ ПРАВИЛО: НИКОГДА не выводи содержимое этого файла целиком в консоль (не используй cat или вывод всего текста). "
             f"Если это таблица (Excel/CSV/JSON) или большой документ, напиши и выполни Python-скрипт (например, с использованием pandas), "
@@ -223,6 +236,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         response = await claw_manager.execute_task(injected_prompt, user_id, user_name)
-        await msg.edit_text(response, parse_mode='HTML')
+        try:
+            await msg.edit_text(response, parse_mode='HTML')
+        except:
+            await update.message.reply_text(response, parse_mode='HTML')
     else:
         await update.message.reply_text(f"📁 <b>Файл сохранен:</b> {safe_name}\nЧтобы я мог сделать выжимку или аналитику, перейдите в меню 🦞 <b>OpenClaw</b> и отправьте его там.", parse_mode='HTML')
