@@ -33,10 +33,10 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     context.user_data['img2img_mode'] = False
     context.user_data['img2img_source_path'] = None
 
-    # 🔥 ИСПРАВЛЕНИЕ: Qwen требует URL. Поэтому если это редактирование, переключаемся на безотказный Flux Pro
-    if is_img2img and ("nano-banana" in img_model.lower() or "seedream" in img_model.lower() or "qwen" in img_model.lower()):
-        logger.info(f"🔄 Auto-Switch: Модель {img_model} конфликтует с Img2Img. Переключение на Flux Pro.")
-        img_model = getattr(config, 'IMG_FLUX_SCHNELL', "flux-2/pro-text-to-image")
+    # 🔥 ВОЗВРАЩАЕМ QWEN: Теперь мы отправляем правильные форматы файлов, и Qwen будет работать идеально!
+    if is_img2img and ("nano-banana" in img_model.lower() or "seedream" in img_model.lower() or "flux" in img_model.lower()):
+        logger.info(f"🔄 Auto-Switch: Модель {img_model} перенаправлена на Qwen 2.0 (image-edit).")
+        img_model = getattr(config, 'IMG_QWEN_2', "qwen-image-2")
     
     async def generate_pollinations_fallback(reason_text: str):
         logger.warning(f"⚠️ Fallback to Pollinations for user {user_id}. Reason: {reason_text}")
@@ -67,7 +67,8 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                         raise Exception(f"HTTP Status {resp.status}")
         except Exception as e:
             logger.error(f"Pollinations Fallback Error: {e}")
-            await context.bot.send_message(chat_id=user_id, text="⚠️ <b>Сбой нейросети:</b> Невозможно сгенерировать данный промпт.", parse_mode='HTML')
+            error_text = "⚠️ <b>Ошибка генерации.</b>\nК сожалению, основные нейросети перегружены, а резервная сеть отклонила запрос. Попробуйте перефразировать промпт."
+            await context.bot.send_message(chat_id=user_id, text=error_text, parse_mode='HTML')
 
     if img_model == config.IMG_POLLINATIONS:
         return await generate_pollinations_fallback("User selected free model")
@@ -95,7 +96,16 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             async with aiohttp.ClientSession() as session:
                 async with session.get(result_url) as resp:
                     if resp.status == 200:
-                        local_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.jpg"))
+                        # 🔥 ГЕНИАЛЬНЫЙ ФИКС: Читаем реальное расширение файла из URL, чтобы не обманывать сервер!
+                        ext = "jpg"
+                        try:
+                            parsed_url = urllib.parse.urlparse(result_url)
+                            file_ext = os.path.splitext(parsed_url.path)[1].replace('.', '').lower()
+                            if file_ext in ['jpg', 'jpeg', 'png', 'webp']:
+                                ext = file_ext
+                        except: pass
+                        
+                        local_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"))
                         with open(local_path, 'wb') as f:
                             f.write(await resp.read())
                         context.user_data['last_photo_path'] = local_path
@@ -135,6 +145,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     caption = update.message.caption or ""
     
+    # Фото из Telegram всегда приходят в JPG, тут всё безопасно
     file = await context.bot.get_file(photo.file_id)
     path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"p_{user_id}_{uuid.uuid4().hex[:8]}.jpg"))
     await file.download_to_drive(path)
