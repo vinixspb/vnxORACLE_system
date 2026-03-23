@@ -5,6 +5,8 @@ from telegram.ext import ContextTypes
 from services.kie_client import kie_studio
 from loader import sheets_mgr
 from services.prompt_censor import is_prompt_safe, clean_prompt
+import config
+from services.messages import get_wait_message  # 🔥 Интегрируем динамические шутки
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +51,17 @@ async def handle_video_text_request(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("🎬 <b>Модуль Видео Ai</b> доступен только на тарифах PRO и NEO.", parse_mode='HTML')
         return
 
-    # Уведомляем пользователя, что процесс долгий
+    # 🔥 Используем динамическую шутку для видео
+    wait_text = get_wait_message("video")
     msg = await update.message.reply_text(
-        "⏳ <i>Режиссерская хлопушка! Нейросеть начала рендеринг видео...</i>\n\n"
-        "⚠️ <b>Внимание:</b> Процесс генерации видео занимает от 2 до 5 минут. Пожалуйста, не отправляйте новые запросы, пока видео не будет готово.", 
+        f"{wait_text}\n\n"
+        "⚠️ <b>Внимание:</b> Процесс генерации занимает от 2 до 5 минут. Пожалуйста, не отправляйте новые запросы, пока видео не будет готово.", 
         parse_mode='HTML'
     )
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VIDEO)
 
-    # Запускаем генерацию
-    model = "grok-imagine/text-to-video" 
+    # 🔥 Переключаем на новую флагманскую модель (Kling 3.0) вместо Grok
+    model = getattr(config, 'VIDEO_KLING_3', "kling-3-motion-control") 
     video_url = await kie_studio.generate_video(prompt=safe_api_prompt, model=model)
 
     if video_url:
