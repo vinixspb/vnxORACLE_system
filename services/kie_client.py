@@ -252,41 +252,56 @@ class KieClient:
         return None
 
     # ==========================================
-    # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (UPSCALE)
+    # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (ГИБРИДНЫЙ UPSCALE PIPELINE)
     # ==========================================
-    async def upscale_image(self, task_id: str) -> str:
-        """🚀 ИДЕАЛЬНЫЙ UPSCALE: Использует только task_id предыдущей генерации KIE"""
-        if not self.api_key or not task_id: 
-            return None
-            
+    async def upscale_pipeline(self, task_id: str = None, image_path: str = None) -> tuple:
+        """
+        🚀 АРХИТЕКТУРА УРОВНЯ SaaS:
+        1. KIE (если есть task_id)
+        2. ESRGAN через Replicate (если это пользовательское фото)
+        Возвращает: (url, provider_name)
+        """
+        # 1. KIE (основной быстрый контур)
+        if task_id:
+            logger.info(f"✨ Запуск KIE Upscale для task_id: {task_id}")
+            url = await self._kie_upscale(task_id)
+            if url:
+                return url, "KIE"
+            logger.warning("⚠️ KIE Upscale не удался. Переход к fallback...")
+
+        # 2. ESRGAN (внешний премиум контур для загруженных фото)
+        if image_path and os.path.exists(image_path):
+            replicate_key = getattr(config, 'REPLICATE_API_KEY', None)
+            if not replicate_key:
+                logger.error("❌ REPLICATE_API_KEY отсутствует. Внешний Upscale невозможен.")
+                return None, None
+
+            logger.info(f"✨ Запуск Real-ESRGAN Upscale для: {image_path}")
+            url = await self._replicate_esrgan_upscale(image_path, replicate_key)
+            if url:
+                return url, "ESRGAN"
+
+        return None, None
+
+    async def _kie_upscale(self, task_id: str) -> str:
+        """Внутренний Upscale KIE по task_id"""
         create_url = f"{self.base_url}/jobs/createTask"
+        payload = {"model": "grok-imagine/upscale", "input": {"task_id": task_id}}
+        task_id_new = None
         
-        # 🔥 Точный Payload из документации KIE
-        payload = {
-            "model": "grok-imagine/upscale",
-            "input": {
-                "task_id": task_id
-            }
-        }
-        
-        new_task_id = None
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
                 async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     data = await resp.json()
                     if data.get("code") == 200: 
-                        new_task_id = data.get("data", {}).get("taskId")
-                        logger.info(f"✅ KIE Upscale Task Created: {new_task_id} (from original: {task_id})")
-                    else:
-                        logger.error(f"❌ KIE Upscale API Error: {data}")
-                        return None
+                        task_id_new = data.get("data", {}).get("taskId")
             except Exception as e: 
-                logger.error(f"❌ KIE Upscale Network Error: {e}")
+                logger.error(f"❌ KIE Upscale HTTP Error: {e}")
                 return None
 
-        if not new_task_id: return None
+        if not task_id_new: return None
         
-        query_url = f"{self.base_url}/jobs/recordInfo?taskId={new_task_id}"
+        query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id_new}"
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(60):
                 await asyncio.sleep(3)
@@ -299,12 +314,61 @@ class KieClient:
                             result_json_str = result_data.get("data", {}).get("resultJson", "{}")
                             try:
                                 parsed = json.loads(result_json_str)
-                                result_url = parsed.get("resultUrls", [None])[0]
-                                logger.info(f"✨ KIE Upscale Complete! URL: {result_url}")
-                                return result_url
+                                return parsed.get("resultUrls", [None])[0]
                             except json.JSONDecodeError: return None
                         elif state == "fail": return None
                 except Exception: continue
+        return None
+
+    async def _replicate_esrgan_upscale(self, image_path: str, api_key: str) -> str:
+        """Внешний премиум Upscale (Real-ESRGAN) через Replicate API"""
+        url = "https://api.replicate.com/v1/predictions"
+        headers = {
+            "Authorization": f"Token {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            with open(image_path, "rb") as img_file:
+                encoded = base64.b64encode(img_file.read()).decode('utf-8')
+                ext = image_path.split('.')[-1].lower()
+                mime = "image/png" if ext == "png" else "image/jpeg"
+                data_uri = f"data:{mime};base64,{encoded}"
+
+            # Точный Payload для Real-ESRGAN x2 (с улучшением лиц)
+            payload = {
+                "version": "42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b", 
+                "input": {
+                    "image": data_uri,
+                    "scale": 2,
+                    "face_enhance": True
+                }
+            }
+
+            async with aiohttp.ClientSession() as session:
+                # 1. Отправляем задачу в Replicate
+                async with session.post(url, headers=headers, json=payload, timeout=30) as resp:
+                    if resp.status != 201:
+                        logger.error(f"❌ Replicate Error: {await resp.text()}")
+                        return None
+                    data = await resp.json()
+                    prediction_url = data["urls"]["get"]
+
+                # 2. Ожидаем результат (Polling)
+                for _ in range(60):
+                    await asyncio.sleep(2)
+                    async with session.get(prediction_url, headers=headers, timeout=10) as resp:
+                        if resp.status == 200:
+                            poll_data = await resp.json()
+                            status = poll_data.get("status")
+                            if status == "succeeded":
+                                return poll_data.get("output")
+                            elif status == "failed":
+                                logger.error(f"❌ Replicate Prediction Failed: {poll_data}")
+                                return None
+        except Exception as e:
+            logger.error(f"❌ Replicate Network Error: {e}")
+
         return None
 
 kie_studio = KieClient()
