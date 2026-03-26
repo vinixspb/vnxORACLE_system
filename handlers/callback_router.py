@@ -182,8 +182,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "photo_upscale":
         path = context.user_data.get('last_photo_path')
+        task_id = context.user_data.get('last_task_id') # 🔥 Забираем Task ID
+        
         if not path or not os.path.exists(path):
-            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            await query.answer("⚠️ Файл устарел или утерян сервером. Загрузите фото заново.", show_alert=True)
+            return
+            
+        # 🔥 Если Task ID нет (это загруженное пользователем фото)
+        if not task_id:
+            await query.answer("⚠️ Встроенный Upscale работает только со сгенерированными фото! Модуль для ваших фото в разработке.", show_alert=True)
             return
         
         # 🔥 ОСТАВЛЯЕМ ФОТО в чате!
@@ -198,7 +205,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             from services.kie_client import kie_studio
-            upscaled_url = await kie_studio.upscale_image(path)
+            # 🔥 Передаем Task ID вместо пути к файлу
+            upscaled_url = await kie_studio.upscale_image(task_id)
         finally:
             loader.stop()
         
