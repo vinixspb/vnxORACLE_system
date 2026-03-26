@@ -27,38 +27,39 @@ class KieClient:
                     safe_payload["input"]["image_input"] = ["<BASE64_HIDDEN>"]
                 if "image_url" in safe_payload["input"] and str(safe_payload["input"]["image_url"]).startswith("data:image"):
                     safe_payload["input"]["image_url"] = "<BASE64_HIDDEN>"
+            if "base64Data" in safe_payload:
+                safe_payload["base64Data"] = "<BASE64_HIDDEN>"
         except Exception:
             pass
         return safe_payload
 
     async def _upload_to_kie(self, file_path: str) -> str:
-        """🚀 НАТИВНАЯ ЗАГРУЗКА: Отправляем файл напрямую на сервера KIE (Без посредников)"""
-        # 🔥 ИСПРАВЛЕНИЕ: Правильный эндпоинт согласно официальной OpenAPI спецификации KIE
-        url = "https://api.kie.ai/api/file-stream-upload"
-        
-        # Для multipart/form-data нельзя жестко задавать Content-Type (aiohttp сделает это сам)
-        upload_headers = {"Authorization": f"Bearer {self.api_key}"}
+        """🚀 НАТИВНАЯ ЗАГРУЗКА: Используем официальный Base64 File Upload API KIE"""
+        url = "https://api.kie.ai/api/file-base64-upload"
         
         try:
             with open(file_path, 'rb') as f:
-                async with aiohttp.ClientSession() as session:
-                    form = aiohttp.FormData()
-                    # KIE ожидает поле 'file', а также опционально 'uploadPath'
-                    form.add_field('file', f, filename=os.path.basename(file_path))
-                    form.add_field('uploadPath', 'images/bot-uploads')
-                    
-                    async with session.post(url, headers=upload_headers, data=form, timeout=30) as resp:
+                encoded_string = base64.b64encode(f.read()).decode('utf-8')
+                ext = file_path.split('.')[-1].lower()
+                mime = "image/png" if ext == "png" else "image/jpeg"
+                data_url = f"data:{mime};base64,{encoded_string}"
+                
+                payload = {
+                    "base64Data": data_url,
+                    "uploadPath": "images/bot-uploads",
+                    "fileName": os.path.basename(file_path)
+                }
+                
+                async with aiohttp.ClientSession(headers=self.headers) as session:
+                    async with session.post(url, json=payload, timeout=30) as resp:
                         if resp.status == 200:
                             res = await resp.json()
-                            # Извлекаем URL из структуры data.downloadUrl
-                            data = res.get("data", {})
-                            result_url = data.get("downloadUrl") or data.get("fileUrl") or res.get("url")
-                            
-                            if result_url:
-                                logger.info(f"✅ Успешная загрузка в KIE Cloud: {result_url}")
-                                return result_url
-                            else:
-                                logger.error(f"❌ KIE Upload Parse Error: {res}")
+                            if res.get("success") and "data" in res:
+                                result_url = res["data"].get("downloadUrl")
+                                if result_url:
+                                    logger.info(f"✅ Успешная загрузка (Base64) в KIE Cloud: {result_url}")
+                                    return result_url
+                            logger.error(f"❌ KIE Upload Parse Error: {res}")
                         else:
                             logger.error(f"❌ KIE Upload HTTP Error: {resp.status} - {await resp.text()}")
         except Exception as e:
@@ -119,11 +120,11 @@ class KieClient:
 
         input_data = {"prompt": prompt, "num_images": 1}
         
-        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный пайплайн с нативным Upload для Qwen
+        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный пайплайн с нативным Base64 Upload для Qwen
         if source_image and os.path.exists(source_image):
             if model_family == "qwen_image":
                 model = "qwen/image-edit"
-                # Загружаем прямо в KIE
+                # Загружаем прямо в KIE через Base64 эндпоинт
                 image_url = await self._upload_to_kie(source_image)
                 if image_url:
                     input_data["image_url"] = image_url
