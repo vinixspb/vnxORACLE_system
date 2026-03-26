@@ -69,7 +69,9 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         enhanced_prompt = f"{safe_prompt}, highly detailed, 8k, cinematic lighting"
         encoded_prompt = urllib.parse.quote(enhanced_prompt)
         seed = random.randint(1, 999999)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width={w}&height={h}&nologo=true"
+        
+        # 🔥 ИСПРАВЛЕНИЕ: Pollinations ввел Premium для параметра nologo=true (ошибка 401). Убираем его!
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width={w}&height={h}"
         
         caption_text = f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Fallback)</code>\nPrompt: {safe_prompt}\n\n⚠️ <i>Основная нейросеть временно недоступна, использован резерв.</i>"
         
