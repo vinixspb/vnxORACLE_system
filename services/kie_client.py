@@ -254,28 +254,39 @@ class KieClient:
     # ==========================================
     # ✨ УЛУЧШЕНИЕ КАЧЕСТВА (UPSCALE)
     # ==========================================
-    async def upscale_image(self, source_image: str) -> str:
-        if not self.api_key or not source_image or not os.path.exists(source_image): return None
+    async def upscale_image(self, task_id: str) -> str:
+        """🚀 ИДЕАЛЬНЫЙ UPSCALE: Использует только task_id предыдущей генерации KIE"""
+        if not self.api_key or not task_id: 
+            return None
+            
         create_url = f"{self.base_url}/jobs/createTask"
-        try:
-            with open(source_image, "rb") as img_file:
-                encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
-                ext = source_image.split('.')[-1].lower()
-                mime_type = "image/png" if ext == "png" else "image/jpeg"
-                image_input = [f"data:{mime_type};base64,{encoded_string}"]
-        except Exception as e: return None
-
-        payload = {"model": "grok-imagine/upscale", "input": {"image_input": image_input, "prompt": "high quality, ultra detailed"}}
-        task_id = None
+        
+        # 🔥 Точный Payload из документации KIE
+        payload = {
+            "model": "grok-imagine/upscale",
+            "input": {
+                "task_id": task_id
+            }
+        }
+        
+        new_task_id = None
         async with aiohttp.ClientSession(headers=self.headers) as session:
             try:
                 async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     data = await resp.json()
-                    if data.get("code") == 200: task_id = data.get("data", {}).get("taskId")
-            except Exception as e: return None
+                    if data.get("code") == 200: 
+                        new_task_id = data.get("data", {}).get("taskId")
+                        logger.info(f"✅ KIE Upscale Task Created: {new_task_id} (from original: {task_id})")
+                    else:
+                        logger.error(f"❌ KIE Upscale API Error: {data}")
+                        return None
+            except Exception as e: 
+                logger.error(f"❌ KIE Upscale Network Error: {e}")
+                return None
 
-        if not task_id: return None
-        query_url = f"{self.base_url}/jobs/recordInfo?taskId={task_id}"
+        if not new_task_id: return None
+        
+        query_url = f"{self.base_url}/jobs/recordInfo?taskId={new_task_id}"
         async with aiohttp.ClientSession(headers=self.headers) as session:
             for attempt in range(60):
                 await asyncio.sleep(3)
@@ -288,7 +299,9 @@ class KieClient:
                             result_json_str = result_data.get("data", {}).get("resultJson", "{}")
                             try:
                                 parsed = json.loads(result_json_str)
-                                return parsed.get("resultUrls", [None])[0]
+                                result_url = parsed.get("resultUrls", [None])[0]
+                                logger.info(f"✨ KIE Upscale Complete! URL: {result_url}")
+                                return result_url
                             except json.JSONDecodeError: return None
                         elif state == "fail": return None
                 except Exception: continue
