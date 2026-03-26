@@ -113,27 +113,43 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         path = context.user_data.get('last_photo_path')
 
         if not path or not os.path.exists(path):
-            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            await query.answer("⚠️ Файл устарел или утерян сервером. Загрузите фото заново.", show_alert=True)
             return
 
         context.user_data['mode'] = 'img2img_wait'
         context.user_data['img2img_source_path'] = path  
         
-        # 🔥 ИСПРАВЛЕНИЕ: Удаляем ТОЛЬКО КНОПКИ, само фото остается в чате!
-        try: await query.message.edit_reply_markup(reply_markup=None)
-        except Exception as e: logger.warning(f"Message edit markup error: {e}")
+        # 🔥 Удаляем старое сообщение с кнопками
+        try: 
+            await query.message.delete()
+        except Exception: 
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
 
-        await context.bot.send_message(chat_id=user_id, text="🪄 <b>Режим редактирования активирован!</b>\n\nНапишите, что нужно изменить на фото.\n\nПримеры:\n• 'Сделай небо синим'\n• 'Добавь радугу'\n• 'Измени цвет машины на красный'\n\n💡 <i>Для выхода напишите 'отмена'</i>", parse_mode='HTML')
+        # 🔥 Отправляем подробное меню
+        menu_text = (
+            "🪄 <b>Режим редактирования активирован!</b>\n\n"
+            "Напишите, что нужно изменить на фото.\n\n"
+            "Примеры:\n"
+            "• 'Сделай небо синим'\n"
+            "• 'Добавь радугу'\n"
+            "• 'Сделай в мультяшном стиле'\n\n"
+            "💡 <i>Для выхода напишите 'отмена'</i>"
+        )
+        await context.bot.send_message(chat_id=user_id, text=menu_text, parse_mode='HTML')
 
     elif data == "photo_upscale":
         path = context.user_data.get('last_photo_path')
         if not path or not os.path.exists(path):
-            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
+            await query.answer("⚠️ Файл устарел или утерян сервером. Загрузите фото заново.", show_alert=True)
             return
         
-        # 🔥 ИСПРАВЛЕНИЕ: Тоже оставляем фото в истории, убираем только кнопки
-        try: await query.message.edit_reply_markup(reply_markup=None)
-        except Exception as e: logger.warning(f"Message edit markup error: {e}")
+        # 🔥 Удаляем старое сообщение
+        try: 
+            await query.message.delete()
+        except Exception: 
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
             
         prefix = "✨ <b>Улучшение качества...</b>\n"
         wait_msg = await context.bot.send_message(chat_id=user_id, text=f"{prefix}{get_wait_message('image')}", parse_mode='HTML')
