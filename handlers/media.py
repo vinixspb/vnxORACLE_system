@@ -166,6 +166,8 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             if local_path:
                 context.user_data['last_photo_path'] = local_path
                 context.user_data['last_photo_caption'] = safe_prompt
+                # 🔥 СОХРАНЯЕМ TASK ID ДЛЯ UPSCALE!
+                context.user_data['last_task_id'] = task_id 
             
             try: await msg.delete()
             except: pass
@@ -221,6 +223,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     context.user_data['last_photo_path'] = path
     context.user_data['last_photo_caption'] = caption
+    # 🔥 Сбрасываем Task ID, так как это загруженное фото, а не генерация
+    context.user_data['last_task_id'] = None 
     
     instruction_text = (
         "📸 <b>Изображение получено!</b>\n\n"
