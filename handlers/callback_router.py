@@ -187,11 +187,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not path or not os.path.exists(path):
             await query.answer("⚠️ Файл устарел или утерян сервером. Загрузите фото заново.", show_alert=True)
             return
-            
-        # 🔥 Если Task ID нет (это загруженное пользователем фото)
-        if not task_id:
-            await query.answer("⚠️ Встроенный Upscale работает только со сгенерированными фото! Модуль для ваших фото в разработке.", show_alert=True)
-            return
         
         # 🔥 ОСТАВЛЯЕМ ФОТО в чате!
         try: await query.message.edit_reply_markup(reply_markup=None)
@@ -205,17 +200,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             from services.kie_client import kie_studio
-            # 🔥 Передаем Task ID вместо пути к файлу
-            upscaled_url = await kie_studio.upscale_image(task_id)
+            # 🔥 Вызываем умный гибридный пайплайн (KIE + ESRGAN)
+            upscaled_url, provider = await kie_studio.upscale_pipeline(task_id=task_id, image_path=path)
         finally:
             loader.stop()
         
         if upscaled_url:
             from keyboards.ai_image import get_post_generation_keyboard
-            await context.bot.send_photo(chat_id=user_id, photo=upscaled_url, caption="✨ <b>Качество успешно улучшено! (Upscaled)</b>", reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
+            # 🔥 Красиво выводим название движка
+            provider_text = "KIE Upscale" if provider == "KIE" else "Real-ESRGAN"
+            caption = f"✨ <b>Качество успешно улучшено!</b>\n⚙️ <i>Движок: {provider_text}</i>"
+            
+            await context.bot.send_photo(chat_id=user_id, photo=upscaled_url, caption=caption, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
             await wait_msg.delete()
         else:
-            await wait_msg.edit_text("❌ Ошибка Upscale. Нейросеть отклонила запрос. Проверьте логи.")
+            # 🔥 Дружелюбный ответ, если нет ключа для пользовательских фото
+            if not task_id and not getattr(config, 'REPLICATE_API_KEY', None):
+                await wait_msg.edit_text("⚠️ <b>Внешний Upscale не настроен.</b>\nДля улучшения ваших фото добавьте <code>REPLICATE_API_KEY</code> (Replicate.com) в файл config.py.", parse_mode='HTML')
+            else:
+                await wait_msg.edit_text("❌ Ошибка Upscale. Нейросеть отклонила запрос. Проверьте логи.", parse_mode='HTML')
 
     elif data.startswith("img_ratio_"):
         ratio = data.split("_")[2] 
