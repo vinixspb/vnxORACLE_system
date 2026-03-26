@@ -70,8 +70,8 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         encoded_prompt = urllib.parse.quote(enhanced_prompt)
         seed = random.randint(1, 999999)
         
-        # 🔥 ИСПРАВЛЕНИЕ: Pollinations ввел Premium для параметра nologo=true (ошибка 401). Убираем его!
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&width={w}&height={h}"
+        # 🔥 ИСПРАВЛЕНИЕ 401 ОШИБКИ: Убираем любые капризные параметры и используем базовый URL Pollinations
+        image_url = f"https://pollinations.ai/p/{encoded_prompt}?width={w}&height={h}&seed={seed}"
         
         caption_text = f"🎨 <b>Art by vnxORACLE</b>\nModel: <code>Pollinations (Fallback)</code>\nPrompt: {safe_prompt}\n\n⚠️ <i>Основная нейросеть временно недоступна, использован резерв.</i>"
         
@@ -80,18 +80,22 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
             
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                # Pollinations может генерировать долго, даем ему 45 секунд
+                async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=45)) as resp:
                     if resp.status == 200:
                         image_data = await resp.read()
                         if hasattr(update, 'callback_query') and update.callback_query:
                             await context.bot.send_photo(chat_id=user_id, photo=image_data, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
                         else:
                             await update.message.reply_photo(photo=image_data, caption=caption_text, reply_markup=get_post_generation_keyboard(), parse_mode='HTML')
+                    elif resp.status == 401:
+                        # 🔥 Обработка 401 без крэша (если ключи в будущем станут обязательными)
+                        raise Exception("Pollinations API requires Authentication (401). Fallback disabled.")
                     else:
                         raise Exception(f"HTTP Status {resp.status}")
         except Exception as e:
             logger.error(f"Pollinations Fallback Error: {e}")
-            error_text = "⚠️ <b>Ошибка генерации.</b>\nК сожалению, основные нейросети перегружены, а резервная сеть отклонила запрос. Попробуйте перефразировать промпт."
+            error_text = "⚠️ <b>Все нейросети сейчас сильно перегружены.</b>\nПожалуйста, попробуйте отправить запрос через пару минут."
             await context.bot.send_message(chat_id=user_id, text=error_text, parse_mode='HTML')
 
     if img_model == config.IMG_POLLINATIONS:
@@ -118,7 +122,9 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
         local_path = None
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(result_url) as resp:
+                # 🔥 Притворяемся браузером, чтобы обойти блокировку скачивания
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                async with session.get(result_url, headers=headers, timeout=15) as resp:
                     if resp.status == 200:
                         ext = "jpg"
                         try:
@@ -130,32 +136,47 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
                         local_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"))
                         with open(local_path, 'wb') as f:
                             f.write(await resp.read())
-                        context.user_data['last_photo_path'] = local_path
-                        context.user_data['last_photo_caption'] = safe_prompt
+                    else:
+                        logger.warning(f"⚠️ Direct download returned {resp.status}. Using TG fallback.")
         except Exception as e:
             logger.error(f"❌ Ошибка скачивания сгенерированного фото: {e}")
 
         try:
+            sent_msg = None
             if local_path:
                 with open(local_path, 'rb') as photo_to_send:
-                    await context.bot.send_photo(
+                    sent_msg = await context.bot.send_photo(
                         chat_id=user_id, photo=photo_to_send, caption=caption, 
                         reply_markup=get_post_generation_keyboard(), parse_mode='HTML'
                     )
             else:
-                await context.bot.send_photo(
+                sent_msg = await context.bot.send_photo(
                     chat_id=user_id, photo=result_url, caption=caption, 
                     reply_markup=get_post_generation_keyboard(), parse_mode='HTML'
                 )
+                
+                # 🔥 БРОНЕБОЙНЫЙ ФОЛЛБЕК: Если не удалось скачать напрямую, скачиваем через сервера Telegram!
+                if sent_msg and sent_msg.photo:
+                    tg_file = await context.bot.get_file(sent_msg.photo[-1].file_id)
+                    local_path = os.path.abspath(os.path.join(DOWNLOADS_DIR, f"gen_{user_id}_{uuid.uuid4().hex[:8]}.jpg"))
+                    await tg_file.download_to_drive(local_path)
+                    logger.info("✅ Успешно сохранено через Telegram Fallback.")
+            
+            # Теперь файл 100% есть на сервере
+            if local_path:
+                context.user_data['last_photo_path'] = local_path
+                context.user_data['last_photo_caption'] = safe_prompt
+            
             try: await msg.delete()
             except: pass
+            
         except Exception as e:
+            logger.error(f"Telegram Photo Send Error: {e}")
             await msg.edit_text(f"✅ Картинка готова, но Telegram не смог её загрузить.\nСсылка: {result_url}")
     else:
         try: await msg.delete() 
         except: pass
         await generate_pollinations_fallback(f"KIE Error 500 with model {img_model}")
-
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
