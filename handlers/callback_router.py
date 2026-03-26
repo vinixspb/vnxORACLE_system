@@ -12,6 +12,31 @@ from services.messages import get_wait_message, DynamicWaitMessage
 
 logger = logging.getLogger(__name__)
 
+async def _safe_menu_edit(query, context, text: str, markup=None):
+    """
+    🛡 Бронебойная функция: Безопасно заменяет меню.
+    Если мы нажимаем кнопку под картинкой/видео/гс - мы убираем кнопки и шлем новый текст.
+    Если мы в текстовом меню - просто плавно его редактируем.
+    """
+    try:
+        if query.message.photo or query.message.video or query.message.document or query.message.audio or query.message.voice:
+            # Оставляем медиа в чате навсегда, просто убираем кнопки
+            try:
+                await query.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            # Отправляем новое текстовое меню
+            await context.bot.send_message(chat_id=query.from_user.id, text=text, reply_markup=markup, parse_mode='HTML')
+        else:
+            # Безопасно редактируем текстовое сообщение
+            await query.edit_message_text(text=text, reply_markup=markup, parse_mode='HTML')
+    except Exception as e:
+        logger.warning(f"Safe Menu Edit Warning: {e}")
+        try:
+            await context.bot.send_message(chat_id=query.from_user.id, text=text, reply_markup=markup, parse_mode='HTML')
+        except:
+            pass
+
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -23,31 +48,39 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['mode'] = None 
         from keyboards.ai_video import get_video_menu_keyboard 
         menu_text = "🎬 <b>Модуль Видео Ai (Kling 3.0 Motion)</b>\n\nВыберите способ генерации:\n📝 <b>По тексту</b> — Опишите сцену, и нейросеть создаст ролик с нуля.\n🖼 <b>По картинке</b> — Нейросеть 'оживит' готовую фотографию."
-        await query.edit_message_text(text=menu_text, reply_markup=get_video_menu_keyboard(), parse_mode='HTML')
+        await _safe_menu_edit(query, context, menu_text, get_video_menu_keyboard())
 
     elif data == "profile_tariffs":
         tariffs_text = "\n\n".join(config.TARIFF_INFO.values())
-        await query.edit_message_text(f"{tariffs_text}\n\n👇 <b>Выберите тариф для подключения:</b>", reply_markup=keyboards.get_subscription_keyboard(), parse_mode='HTML')
+        await _safe_menu_edit(query, context, f"{tariffs_text}\n\n👇 <b>Выберите тариф для подключения:</b>", keyboards.get_subscription_keyboard())
     
     elif data == "profile_support":
-        await query.edit_message_text(config.MSG_SUPPORT, parse_mode='HTML', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_profile")]]))
+        await _safe_menu_edit(query, context, config.MSG_SUPPORT, InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="back_to_profile")]]))
 
-    elif data == "back_to_profile": await show_profile(update, user_id)
+    elif data == "back_to_profile": 
+        if query.message.photo or query.message.video or query.message.document:
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
+        await show_profile(update, user_id)
 
     elif data.startswith("buy_"):
         plan = data.split("_")[1]
-        await query.edit_message_text(f"💳 <b>Оплата тарифа {plan}</b>\n\n{config.PAYMENT_INFO}", parse_mode='HTML')
+        await _safe_menu_edit(query, context, f"💳 <b>Оплата тарифа {plan}</b>\n\n{config.PAYMENT_INFO}")
 
-    elif data == "history_manage": await query.edit_message_reply_markup(reply_markup=keyboards.get_history_keyboard(user_id, mode="delete"))
-    elif data == "history_back": await query.edit_message_reply_markup(reply_markup=keyboards.get_history_keyboard(user_id, mode="view"))
+    elif data == "history_manage": 
+        await query.edit_message_reply_markup(reply_markup=keyboards.get_history_keyboard(user_id, mode="delete"))
+    elif data == "history_back": 
+        await query.edit_message_reply_markup(reply_markup=keyboards.get_history_keyboard(user_id, mode="view"))
 
     elif data.startswith("del_"):
         session_id = int(data.split("_")[1])
         db.delete_session(user_id, session_id)
         await query.answer("🗑 Диалог удален")
         markup = keyboards.get_history_keyboard(user_id, mode="delete")
-        if markup: await query.edit_message_reply_markup(reply_markup=markup)
-        else: await query.edit_message_text("📂 Архив пуст.", reply_markup=keyboards.get_features_keyboard())
+        if markup: 
+            await query.edit_message_reply_markup(reply_markup=markup)
+        else: 
+            await _safe_menu_edit(query, context, "📂 Архив пуст.", keyboards.get_features_keyboard())
 
     elif data.startswith("session_"):
         session_id = int(data.split("_")[1])
@@ -57,7 +90,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "feature_text":
         context.user_data['mode'] = None
         curr = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
-        await query.edit_message_text("💡 <b>ВЫБОР НЕЙРОСЕТИ:</b>", reply_markup=keyboards.get_models_keyboard(user_id, curr), parse_mode='HTML')
+        await _safe_menu_edit(query, context, "💡 <b>ВЫБОР НЕЙРОСЕТИ:</b>", keyboards.get_models_keyboard(user_id, curr))
         
     elif data.startswith("setmodel_"):
         new_model = data.split("setmodel_")[1]
@@ -68,8 +101,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         USER_MODELS[user_id] = new_model
         context.user_data['mode'] = None
-        try: await query.message.delete()
-        except: pass
+        
+        # Если переключали модель под фото - убираем у него кнопки
+        if query.message.photo or query.message.video or query.message.document:
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
+        else:
+            try: await query.message.delete()
+            except: pass
         
         all_models = config_models.MODELS_START + config_models.MODELS_PRO + config_models.MODELS_NEO
         model_name = next((name for name, code in all_models if code == new_model), new_model)
@@ -85,14 +124,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ImportError:
             markup = keyboards.get_features_keyboard()
             text = "🛠 Модуль изображений в процессе настройки..."
-        await query.edit_message_text(text, reply_markup=markup, parse_mode='HTML')
+        await _safe_menu_edit(query, context, text, markup)
 
     elif data.startswith("setimg_"):
         new_model = data.split("setimg_")[1]
         context.user_data['img_model'] = new_model
         context.user_data['mode'] = 'img_wait'
-        try: await query.message.delete()
-        except: pass
+        
+        if query.message.photo or query.message.video or query.message.document:
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
+        else:
+            try: await query.message.delete()
+            except: pass
+            
         await context.bot.send_message(chat_id=user_id, text=f"🎨 <b>Модель выбрана!</b>\n\n👇 Опишите, что вы хотите увидеть (чем подробнее, тем лучше):", parse_mode='HTML')
 
     elif data == "photo_vision":
@@ -103,7 +148,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
             return
 
-        try: await query.message.delete()
+        # 🔥 ОСТАВЛЯЕМ ФОТО, удаляем только кнопки
+        try: await query.message.edit_reply_markup(reply_markup=None)
         except: pass
             
         from handlers.chat import process_ai_request
@@ -113,20 +159,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         path = context.user_data.get('last_photo_path')
 
         if not path or not os.path.exists(path):
-            await query.answer("⚠️ Файл устарел или утерян сервером. Загрузите фото заново.", show_alert=True)
+            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
             return
 
         context.user_data['mode'] = 'img2img_wait'
         context.user_data['img2img_source_path'] = path  
         
-        # 🔥 Удаляем старое сообщение с кнопками
-        try: 
-            await query.message.delete()
-        except Exception: 
-            try: await query.message.edit_reply_markup(reply_markup=None)
-            except: pass
+        # 🔥 ОСТАВЛЯЕМ ФОТО в чате! Оно никуда не исчезнет, просто убираем кнопки.
+        try: await query.message.edit_reply_markup(reply_markup=None)
+        except Exception as e: logger.warning(f"Message edit markup error: {e}")
 
-        # 🔥 Отправляем подробное меню
         menu_text = (
             "🪄 <b>Режим редактирования активирован!</b>\n\n"
             "Напишите, что нужно изменить на фото.\n\n"
@@ -141,15 +183,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "photo_upscale":
         path = context.user_data.get('last_photo_path')
         if not path or not os.path.exists(path):
-            await query.answer("⚠️ Файл устарел или утерян сервером. Загрузите фото заново.", show_alert=True)
+            await query.answer("⚠️ Файл устарел. Загрузите фото заново.", show_alert=True)
             return
         
-        # 🔥 Удаляем старое сообщение
-        try: 
-            await query.message.delete()
-        except Exception: 
-            try: await query.message.edit_reply_markup(reply_markup=None)
-            except: pass
+        # 🔥 ОСТАВЛЯЕМ ФОТО в чате!
+        try: await query.message.edit_reply_markup(reply_markup=None)
+        except Exception as e: logger.warning(f"Message edit markup error: {e}")
             
         prefix = "✨ <b>Улучшение качества...</b>\n"
         wait_msg = await context.bot.send_message(chat_id=user_id, text=f"{prefix}{get_wait_message('image')}", parse_mode='HTML')
@@ -174,7 +213,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ratio = data.split("_")[2] 
         prompt = context.user_data.get('img_prompt')
         
-        # 🔥 СБРАСЫВАЕМ РЕЖИМ, чтобы таймер 20с отменился
         if context.user_data.get('mode') == 'img_ratio_wait':
             context.user_data['mode'] = None
             
@@ -188,25 +226,39 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await generate_image(update, context, prompt, ratio)
         
     elif data == "feature_audio":
-        await query.edit_message_text("🎤 <b>АУДИО СЕРВИСЫ:</b>", reply_markup=keyboards.get_audio_keyboard(), parse_mode='HTML')
+        await _safe_menu_edit(query, context, "🎤 <b>АУДИО СЕРВИСЫ:</b>", keyboards.get_audio_keyboard())
         
     elif data == "audio_tts":
         curr_voice = context.user_data.get('voice_id', config.DEFAULT_VOICE)
-        await query.edit_message_text("🗣 <b>ВЫБЕРИТЕ ГОЛОС ДИКТОРА:</b>", reply_markup=keyboards.get_voice_selection_keyboard(curr_voice), parse_mode='HTML')
+        await _safe_menu_edit(query, context, "🗣 <b>ВЫБЕРИТЕ ГОЛОС ДИКТОРА:</b>", keyboards.get_voice_selection_keyboard(curr_voice))
         
     elif data.startswith("setvoice_"):
         context.user_data['voice_id'] = data.split("setvoice_")[1]
         context.user_data['mode'] = 'tts_wait'
         await query.answer("🎙 Голос выбран")
-        await query.message.reply_text("🗣 <b>Режим диктора активен.</b>\nПришлите текст для озвучки:", parse_mode='HTML')
+        
+        if query.message.photo or query.message.video or query.message.document:
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
+        else:
+            try: await query.message.delete()
+            except: pass
+            
+        await context.bot.send_message(chat_id=user_id, text="🗣 <b>Режим диктора активен.</b>\nПришлите текст для озвучки:", parse_mode='HTML')
         
     elif data == "audio_tts_again":
         context.user_data['mode'] = 'tts_wait'
-        await query.message.reply_text("🎤 Жду текст для озвучки:", parse_mode='HTML')
+        if query.message.photo or query.message.video or query.message.document or query.message.audio or query.message.voice:
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
+        await context.bot.send_message(chat_id=user_id, text="🎤 Жду текст для озвучки:", parse_mode='HTML')
         
     elif data == "audio_sfx":
         context.user_data['mode'] = 'sfx_wait'
-        await query.message.reply_text("🔊 <b>Опишите звук (на английском):</b>", parse_mode='HTML')
+        if query.message.photo or query.message.video or query.message.document or query.message.audio or query.message.voice:
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
+        await context.bot.send_message(chat_id=user_id, text="🔊 <b>Опишите звук (на английском):</b>", parse_mode='HTML')
 
     elif data == "feature_openclaw":
         from services.openclaw_core import claw_manager
@@ -219,15 +271,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         context.user_data['mode'] = 'openclaw_wait'
         markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад в меню", callback_data="back_to_features")]])
-        await query.edit_message_text(claw_text, reply_markup=markup, parse_mode='HTML')
+        await _safe_menu_edit(query, context, claw_text, markup)
         
     elif data == "mode_chat_reset":
         context.user_data['mode'] = None
         db.create_session(user_id, title="Новый диалог")
-        await query.message.reply_text("💬 <b>Текстовый режим восстановлен.</b>", parse_mode='HTML')
+        
+        if query.message.photo or query.message.video or query.message.document or query.message.audio or query.message.voice:
+            try: await query.message.edit_reply_markup(reply_markup=None)
+            except: pass
+        
+        await context.bot.send_message(chat_id=user_id, text="💬 <b>Текстовый режим восстановлен.</b>", parse_mode='HTML')
 
     elif data == "back_to_features":
-        await query.edit_message_text("🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", reply_markup=keyboards.get_features_keyboard(), parse_mode='HTML')
+        await _safe_menu_edit(query, context, "🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ:</b>", keyboards.get_features_keyboard())
     
     try: await query.answer()
     except: pass
