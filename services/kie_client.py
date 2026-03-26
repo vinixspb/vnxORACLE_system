@@ -125,10 +125,10 @@ class KieClient:
                         "image_url": image_url,
                         "prompt": prompt,
                         "acceleration": "none",
-                        "guidance_scale": 4,
+                        "guidance_scale": 7.5, # 🔥 Подняли с 4 до 7.5 для строгого следования тексту (реализм)
                         "sync_mode": False,
                         "enable_safety_checker": True,
-                        "negative_prompt": "blurry, ugly",
+                        "negative_prompt": "cartoon, anime, 3d render, painting, illustration, blurry, ugly, deformed", # 🔥 Жесткий запрет на мультяшность
                         "seed": -1
                     }
                     logger.info(f"🪄 Img2Img: Фото загружено STREAM'ом ({image_url}) для Qwen.")
