@@ -33,37 +33,30 @@ class KieClient:
             pass
         return safe_payload
 
-    async def _upload_to_kie(self, file_path: str) -> str:
-        """🚀 НАТИВНАЯ ЗАГРУЗКА: Используем официальный Base64 File Upload API KIE"""
-        url = "https://api.kie.ai/api/file-base64-upload"
+    async def _upload_stream(self, file_path: str) -> str:
+        """🚀 ИДЕАЛЬНЫЙ UPLOAD: Бинарный стрим (без Base64) + Прямой сервер KIE"""
+        url = "https://kieai.redpandaai.co/api/file-stream-upload"
         
         try:
             with open(file_path, 'rb') as f:
-                encoded_string = base64.b64encode(f.read()).decode('utf-8')
-                ext = file_path.split('.')[-1].lower()
-                mime = "image/png" if ext == "png" else "image/jpeg"
-                data_url = f"data:{mime};base64,{encoded_string}"
-                
-                payload = {
-                    "base64Data": data_url,
-                    "uploadPath": "images/bot-uploads",
-                    "fileName": os.path.basename(file_path)
-                }
-                
-                async with aiohttp.ClientSession(headers=self.headers) as session:
-                    async with session.post(url, json=payload, timeout=30) as resp:
+                async with aiohttp.ClientSession() as session:
+                    form = aiohttp.FormData()
+                    form.add_field('file', f, filename=os.path.basename(file_path))
+                    form.add_field('uploadPath', 'images/bot-uploads')
+                    
+                    async with session.post(url, headers={"Authorization": f"Bearer {self.api_key}"}, data=form, timeout=60) as resp:
                         if resp.status == 200:
                             res = await resp.json()
                             if res.get("success") and "data" in res:
                                 result_url = res["data"].get("downloadUrl")
                                 if result_url:
-                                    logger.info(f"✅ Успешная загрузка (Base64) в KIE Cloud: {result_url}")
+                                    logger.info(f"✅ Успешная STREAM-загрузка: {result_url}")
                                     return result_url
-                            logger.error(f"❌ KIE Upload Parse Error: {res}")
+                            logger.error(f"❌ KIE Stream Parse Error: {res}")
                         else:
-                            logger.error(f"❌ KIE Upload HTTP Error: {resp.status} - {await resp.text()}")
+                            logger.error(f"❌ KIE Stream HTTP Error: {resp.status} - {await resp.text()}")
         except Exception as e:
-            logger.error(f"❌ KIE Upload Network Error: {e}")
+            logger.error(f"❌ KIE Stream Network Error: {e}")
         return None
 
     # ==========================================
@@ -120,14 +113,14 @@ class KieClient:
 
         input_data = {"prompt": prompt, "num_images": 1}
         
-        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный пайплайн с нативным Base64 Upload для Qwen
+        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный пайплайн с нативным STREAM Upload для Qwen
         if source_image and os.path.exists(source_image):
             if model_family == "qwen_image":
                 model = "qwen/image-edit"
-                # Загружаем прямо в KIE через Base64 эндпоинт
-                image_url = await self._upload_to_kie(source_image)
+                # Загружаем через правильный STREAM
+                image_url = await self._upload_stream(source_image)
                 if image_url:
-                    # 🔥 ТОЧНЫЙ PAYLOAD ИЗ ДОКУМЕНТАЦИИ QWEN (Строго без num_images!)
+                    # 🔥 ИДЕАЛЬНЫЙ PAYLOAD QWEN (Без num_images, строгая схема)
                     input_data = {
                         "image_url": image_url,
                         "prompt": prompt,
@@ -138,9 +131,9 @@ class KieClient:
                         "negative_prompt": "blurry, ugly",
                         "seed": -1
                     }
-                    logger.info(f"🪄 Img2Img: Фото загружено в KIE Cloud ({image_url}) для Qwen.")
+                    logger.info(f"🪄 Img2Img: Фото загружено STREAM'ом ({image_url}) для Qwen.")
                 else:
-                    logger.error("❌ Не удалось загрузить фото в KIE Cloud.")
+                    logger.error("❌ Не удалось загрузить фото через Stream Upload.")
                     return None, None
             else:
                 try:
@@ -153,26 +146,39 @@ class KieClient:
                 except Exception as e:
                     logger.error(f"❌ KIE Img2Img Error: Не удалось прочитать фото: {e}")
 
-        # Добавляем параметры (для Qwen_image это image_size, output_format, num_inference_steps)
-        for key, value in params.items():
-            input_data[key] = value
+        # Добавляем параметры для остальных сетей (если это не Qwen_image-edit)
+        if model_family != "qwen_image" or not source_image:
+            for key, value in params.items():
+                input_data[key] = value
 
         payload = {"model": model, "input": input_data}
         task_id = None
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
-            try:
-                async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    data = await resp.json()
-                    if data.get("code") != 200:
-                        logger.error(f"❌ KIE Create Task Error: {data} | Payload: {self._sanitize_logs(payload)}")
-                        return None, None
-                    
-                    task_id = data.get("data", {}).get("taskId")
-                    logger.info(f"✅ KIE Task Created: {task_id} (Model: {model})")
-            except Exception as e:
-                logger.error(f"❌ KIE Network Error: {e}")
-                return None, None
+            # 🔥 ВНЕДРЯЕМ RETRY-ЛОГИКУ (3 попытки для обработки 500 ошибок)
+            for attempt in range(3):
+                try:
+                    async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                        # Если сервер KIE отвечает 5xx - ждем 2 сек и пробуем снова
+                        if resp.status >= 500:
+                            logger.warning(f"⚠️ KIE Server Error {resp.status}, попытка {attempt + 1}/3...")
+                            await asyncio.sleep(2)
+                            continue
+                            
+                        data = await resp.json()
+                        if data.get("code") != 200:
+                            logger.error(f"❌ KIE Create Task Error: {data} | Payload: {self._sanitize_logs(payload)}")
+                            break # Если ошибка 4xx (например 422 параметры), ретрай не поможет
+                        
+                        task_id = data.get("data", {}).get("taskId")
+                        logger.info(f"✅ KIE Task Created: {task_id} (Model: {model})")
+                        break # Успех, выходим из цикла retry
+                except asyncio.TimeoutError:
+                    logger.warning(f"⚠️ KIE Timeout, попытка {attempt + 1}/3...")
+                    await asyncio.sleep(2)
+                except Exception as e:
+                    logger.error(f"❌ KIE Network Error: {e}")
+                    break
 
         if not task_id: return None, None
 
