@@ -34,8 +34,9 @@ class KieClient:
         return safe_payload
 
     async def _upload_to_kie(self, file_path: str) -> str:
-        """🚀 НАТИВНАЯ ЗАГРУЗКА: Используем официальный Base64 File Upload API KIE"""
-        url = "https://api.kie.ai/api/file-base64-upload"
+        """🚀 НАТИВНАЯ ЗАГРУЗКА: Используем выделенный сервер KIE + Catbox Fallback"""
+        # 🔥 ИСПРАВЛЕНИЕ: Стучимся напрямую в файловый сервер Redpanda
+        url = "https://kieai.redpandaai.co/api/file-base64-upload"
         
         try:
             with open(file_path, 'rb') as f:
@@ -51,7 +52,8 @@ class KieClient:
                 }
                 
                 async with aiohttp.ClientSession(headers=self.headers) as session:
-                    async with session.post(url, json=payload, timeout=30) as resp:
+                    # Увеличиваем таймаут до 60 секунд
+                    async with session.post(url, json=payload, timeout=60) as resp:
                         if resp.status == 200:
                             res = await resp.json()
                             if res.get("success") and "data" in res:
@@ -64,6 +66,27 @@ class KieClient:
                             logger.error(f"❌ KIE Upload HTTP Error: {resp.status} - {await resp.text()}")
         except Exception as e:
             logger.error(f"❌ KIE Upload Network Error: {e}")
+
+        # 🔥 ФОЛЛБЕК: Если KIE Cloud "лежит", загружаем на безотказный Catbox
+        logger.warning("⚠️ Переключаемся на резервный загрузчик Catbox...")
+        catbox_url = "https://catbox.moe/user/api.php"
+        try:
+            with open(file_path, 'rb') as f:
+                async with aiohttp.ClientSession() as session:
+                    form = aiohttp.FormData()
+                    form.add_field('reqtype', 'fileupload')
+                    ext = file_path.split('.')[-1].lower()
+                    mime = "image/png" if ext == "png" else "image/jpeg"
+                    form.add_field('fileToUpload', f, filename=f'image.{ext}', content_type=mime)
+                    
+                    async with session.post(catbox_url, data=form, timeout=30) as resp:
+                        if resp.status == 200:
+                            result_url = await resp.text()
+                            logger.info(f"✅ Успешная загрузка на Catbox: {result_url.strip()}")
+                            return result_url.strip()
+        except Exception as e:
+            logger.error(f"❌ Catbox Upload Error: {e}")
+            
         return None
 
     # ==========================================
@@ -120,17 +143,17 @@ class KieClient:
 
         input_data = {"prompt": prompt, "num_images": 1}
         
-        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный пайплайн с нативным Base64 Upload для Qwen
+        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: С защищенным загрузчиком
         if source_image and os.path.exists(source_image):
             if model_family == "qwen_image":
                 model = "qwen/image-edit"
-                # Загружаем прямо в KIE через Base64 эндпоинт
+                # Загружаем прямо в KIE (или Catbox)
                 image_url = await self._upload_to_kie(source_image)
                 if image_url:
                     input_data["image_url"] = image_url
-                    logger.info(f"🪄 Img2Img: Фото загружено в KIE Cloud ({image_url}) для Qwen.")
+                    logger.info(f"🪄 Img2Img: Фото загружено ({image_url}) для Qwen.")
                 else:
-                    logger.error("❌ Не удалось загрузить фото в KIE Cloud.")
+                    logger.error("❌ Все варианты загрузки фото провалились.")
                     return None, None
             else:
                 try:
