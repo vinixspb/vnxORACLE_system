@@ -113,41 +113,50 @@ class KieClient:
 
         input_data = {"prompt": prompt, "num_images": 1}
         
-        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный пайплайн с нативным STREAM Upload для Qwen
+        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: УМНЫЙ РОУТЕР (SMART ROUTER) QWEN vs GROK
         if source_image and os.path.exists(source_image):
-            if model_family == "qwen_image":
+            # 1. Анализируем сложность промпта (длина > 80 или наличие стилистических маркеров)
+            complex_keywords = ['realistic', 'style', 'cinematic', 'cartoon', 'anime', 'фэнтези', 'реалистичн', 'мультяшн', 'стиль', 'детали', 'качеств', 'кинематограф', 'art', 'арт']
+            is_complex = len(prompt) > 80 or any(kw in prompt.lower() for kw in complex_keywords)
+            
+            # 2. Роутинг на основе сложности
+            if is_complex:
+                model = "grok-imagine/image-to-image"
+                model_family = "grok_img2img"
+                logger.info(f"🧠 Smart Router: Сложный промпт (len={len(prompt)}). Маршрутизация на GROK (Premium).")
+            else:
                 model = "qwen/image-edit"
-                # Загружаем через правильный STREAM
-                image_url = await self._upload_stream(source_image)
-                if image_url:
-                    # 🔥 ИДЕАЛЬНЫЙ PAYLOAD QWEN (Без num_images, строгая схема)
+                model_family = "qwen_image"
+                logger.info(f"🧠 Smart Router: Простой промпт (len={len(prompt)}). Маршрутизация на QWEN (Default).")
+
+            # 3. Загружаем фото через STREAM (работает безотказно)
+            image_url = await self._upload_stream(source_image)
+            
+            if image_url:
+                if model_family == "grok_img2img":
+                    # 🔥 ИДЕАЛЬНЫЙ PAYLOAD GROK (из документации: массив image_urls)
+                    input_data = {
+                        "prompt": prompt,
+                        "image_urls": [image_url]
+                    }
+                else:
+                    # 🔥 ИДЕАЛЬНЫЙ PAYLOAD QWEN (стандартное редактирование)
                     input_data = {
                         "image_url": image_url,
                         "prompt": prompt,
                         "acceleration": "none",
-                        "guidance_scale": 7.5, # 🔥 Подняли с 4 до 7.5 для строгого следования тексту (реализм)
+                        "guidance_scale": 7.5,
                         "sync_mode": False,
                         "enable_safety_checker": True,
-                        "negative_prompt": "cartoon, anime, 3d render, painting, illustration, blurry, ugly, deformed", # 🔥 Жесткий запрет на мультяшность
+                        "negative_prompt": "blurry, ugly, deformed, bad anatomy, bad quality",
                         "seed": -1
                     }
-                    logger.info(f"🪄 Img2Img: Фото загружено STREAM'ом ({image_url}) для Qwen.")
-                else:
-                    logger.error("❌ Не удалось загрузить фото через Stream Upload.")
-                    return None, None
+                logger.info(f"🪄 Img2Img: Фото загружено ({image_url}) для {model}.")
             else:
-                try:
-                    with open(source_image, "rb") as img_file:
-                        encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
-                        ext = source_image.split('.')[-1].lower()
-                        mime_type = "image/png" if ext == "png" else "image/jpeg"
-                        input_data["image_input"] = [f"data:{mime_type};base64,{encoded_string}"]
-                        logger.info(f"🪄 Img2Img: Прикреплено фото (Base64) для {model}")
-                except Exception as e:
-                    logger.error(f"❌ KIE Img2Img Error: Не удалось прочитать фото: {e}")
-
-        # Добавляем параметры для остальных сетей (если это не Qwen_image-edit)
-        if model_family != "qwen_image" or not source_image:
+                logger.error("❌ Не удалось загрузить фото через Stream Upload.")
+                return None, None
+        else:
+            # Для Text2Img (генерация с нуля) прикрепляем стандартные параметры из config_matrix
             for key, value in params.items():
                 input_data[key] = value
 
@@ -155,7 +164,7 @@ class KieClient:
         task_id = None
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
-            # 🔥 ВНЕДРЯЕМ RETRY-ЛОГИКУ (3 попытки для обработки 500 ошибок)
+            # 🔥 ВНЕДРЯЕМ RETRY-ЛОГИКУ (3 попытки)
             for attempt in range(3):
                 try:
                     async with session.post(create_url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
@@ -286,7 +295,9 @@ class KieClient:
     async def _kie_upscale(self, task_id: str) -> str:
         """Внутренний Upscale KIE по task_id"""
         create_url = f"{self.base_url}/jobs/createTask"
-        payload = {"model": "grok-imagine/upscale", "input": {"task_id": task_id}}
+        
+        # 🔥 Отправляем оба варианта (snake_case и camelCase)
+        payload = {"model": "grok-imagine/upscale", "input": {"task_id": task_id, "taskId": task_id}}
         task_id_new = None
         
         async with aiohttp.ClientSession(headers=self.headers) as session:
@@ -295,6 +306,9 @@ class KieClient:
                     data = await resp.json()
                     if data.get("code") == 200: 
                         task_id_new = data.get("data", {}).get("taskId")
+                    else:
+                        # 🔥 Теперь мы точно увидим причину отклонения в консоли
+                        logger.error(f"❌ KIE Upscale API Error: {data} | Payload: {payload}")
             except Exception as e: 
                 logger.error(f"❌ KIE Upscale HTTP Error: {e}")
                 return None
