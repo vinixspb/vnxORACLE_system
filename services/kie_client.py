@@ -31,22 +31,34 @@ class KieClient:
             pass
         return safe_payload
 
-    async def _upload_to_telegraph(self, file_path: str) -> str:
-        """🚀 Анонимная загрузка фото для получения прямой ссылки (Требование Qwen)"""
-        url = "https://telegra.ph/upload"
+    async def _upload_to_kie(self, file_path: str) -> str:
+        """🚀 НАТИВНАЯ ЗАГРУЗКА: Отправляем файл напрямую на сервера KIE (Без посредников)"""
+        url = "https://api.kie.ai/file-upload-api/upload-file-stream"
+        
+        # Для multipart/form-data нельзя жестко задавать Content-Type (aiohttp сделает это сам)
+        upload_headers = {"Authorization": f"Bearer {self.api_key}"}
+        
         try:
             with open(file_path, 'rb') as f:
                 async with aiohttp.ClientSession() as session:
                     form = aiohttp.FormData()
-                    ext = file_path.split('.')[-1].lower()
-                    mime = "image/png" if ext == "png" else "image/jpeg"
-                    form.add_field('file', f, filename=f'image.{ext}', content_type=mime)
-                    async with session.post(url, data=form, timeout=15) as resp:
-                        res = await resp.json()
-                        if isinstance(res, list) and len(res) > 0 and 'src' in res[0]:
-                            return "https://telegra.ph" + res[0]['src']
+                    # KIE ожидает поле 'file'
+                    form.add_field('file', f, filename=os.path.basename(file_path))
+                    
+                    async with session.post(url, headers=upload_headers, data=form, timeout=30) as resp:
+                        if resp.status == 200:
+                            res = await resp.json()
+                            # Извлекаем URL: KIE может отдавать "url" напрямую или внутри "data.downloadUrl"
+                            result_url = res.get("url") or res.get("data", {}).get("downloadUrl") or res.get("data", {}).get("url")
+                            
+                            if result_url:
+                                return result_url
+                            else:
+                                logger.error(f"❌ KIE Upload Parse Error: {res}")
+                        else:
+                            logger.error(f"❌ KIE Upload HTTP Error: {resp.status} - {await resp.text()}")
         except Exception as e:
-            logger.error(f"❌ Telegraph Upload Error: {e}")
+            logger.error(f"❌ KIE Upload Network Error: {e}")
         return None
 
     # ==========================================
@@ -103,17 +115,17 @@ class KieClient:
 
         input_data = {"prompt": prompt, "num_images": 1}
         
-        # 🔥 ИНТЕГРАЦИЯ IMG2IMG с обходом защиты Qwen
+        # 🔥 ИНТЕГРАЦИЯ IMG2IMG: Идеальный пайплайн с нативным Upload для Qwen
         if source_image and os.path.exists(source_image):
             if model_family == "qwen_image":
                 model = "qwen/image-edit"
-                # Загружаем на Telegraph для получения чистой ссылки
-                image_url = await self._upload_to_telegraph(source_image)
+                # Загружаем прямо в KIE
+                image_url = await self._upload_to_kie(source_image)
                 if image_url:
                     input_data["image_url"] = image_url
-                    logger.info(f"🪄 Img2Img: Фото загружено на Telegraph ({image_url}) для Qwen.")
+                    logger.info(f"🪄 Img2Img: Фото загружено в KIE Cloud ({image_url}) для Qwen.")
                 else:
-                    logger.error("❌ Не удалось загрузить фото на Telegraph.")
+                    logger.error("❌ Не удалось загрузить фото в KIE Cloud.")
                     return None, None
             else:
                 try:
