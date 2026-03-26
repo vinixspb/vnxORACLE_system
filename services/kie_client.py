@@ -33,7 +33,8 @@ class KieClient:
 
     async def _upload_to_kie(self, file_path: str) -> str:
         """🚀 НАТИВНАЯ ЗАГРУЗКА: Отправляем файл напрямую на сервера KIE (Без посредников)"""
-        url = "https://api.kie.ai/file-upload-api/upload-file-stream"
+        # 🔥 ИСПРАВЛЕНИЕ: Правильный эндпоинт согласно официальной OpenAPI спецификации KIE
+        url = "https://api.kie.ai/api/file-stream-upload"
         
         # Для multipart/form-data нельзя жестко задавать Content-Type (aiohttp сделает это сам)
         upload_headers = {"Authorization": f"Bearer {self.api_key}"}
@@ -42,16 +43,19 @@ class KieClient:
             with open(file_path, 'rb') as f:
                 async with aiohttp.ClientSession() as session:
                     form = aiohttp.FormData()
-                    # KIE ожидает поле 'file'
+                    # KIE ожидает поле 'file', а также опционально 'uploadPath'
                     form.add_field('file', f, filename=os.path.basename(file_path))
+                    form.add_field('uploadPath', 'images/bot-uploads')
                     
                     async with session.post(url, headers=upload_headers, data=form, timeout=30) as resp:
                         if resp.status == 200:
                             res = await resp.json()
-                            # Извлекаем URL: KIE может отдавать "url" напрямую или внутри "data.downloadUrl"
-                            result_url = res.get("url") or res.get("data", {}).get("downloadUrl") or res.get("data", {}).get("url")
+                            # Извлекаем URL из структуры data.downloadUrl
+                            data = res.get("data", {})
+                            result_url = data.get("downloadUrl") or data.get("fileUrl") or res.get("url")
                             
                             if result_url:
+                                logger.info(f"✅ Успешная загрузка в KIE Cloud: {result_url}")
                                 return result_url
                             else:
                                 logger.error(f"❌ KIE Upload Parse Error: {res}")
