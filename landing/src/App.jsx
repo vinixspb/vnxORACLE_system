@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { Plus } from 'lucide-react'
+import { Plus, Moon, Sun } from 'lucide-react'
 import { useState } from 'react'
 import './App.css'
 
@@ -101,8 +101,8 @@ function LogoMark() {
       aria-hidden="true"
     >
       <g transform="rotate(-35 13 13)">
-        <rect x="3" y="6.5" width="20" height="5.5" rx="2.75" fill="#000000" />
-        <rect x="3" y="14" width="20" height="5.5" rx="2.75" fill="#000000" />
+        <rect x="3" y="6.5" width="20" height="5.5" rx="2.75" fill="currentColor" />
+        <rect x="3" y="14" width="20" height="5.5" rx="2.75" fill="currentColor" />
       </g>
     </svg>
   )
@@ -118,15 +118,15 @@ function DotGridIcon() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <circle cx="3.5" cy="3.5" r="1.6" fill="#ffffff" />
-      <circle cx="8.5" cy="3.5" r="1.6" fill="#ffffff" />
-      <circle cx="3.5" cy="8.5" r="1.6" fill="#ffffff" />
-      <circle cx="8.5" cy="8.5" r="1.6" fill="#ffffff" />
+      <circle cx="3.5" cy="3.5" r="1.6" fill="currentColor" />
+      <circle cx="8.5" cy="3.5" r="1.6" fill="currentColor" />
+      <circle cx="3.5" cy="8.5" r="1.6" fill="currentColor" />
+      <circle cx="8.5" cy="8.5" r="1.6" fill="currentColor" />
     </svg>
   )
 }
 
-function Navbar({ lang, setLang }) {
+function Navbar({ lang, setLang, theme, toggleTheme }) {
   const t = translations[lang]
 
   return (
@@ -156,6 +156,15 @@ function Navbar({ lang, setLang }) {
       </div>
 
       <div className="nav-right">
+        <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          type="button"
+          aria-label="Toggle theme"
+        >
+          {theme === 'light' ? <Moon size={14} strokeWidth={2} /> : <Sun size={14} strokeWidth={2} />}
+        </button>
+
         <button
           className="lang-switch"
           onClick={() => setLang(lang === 'en' ? 'ru' : 'en')}
@@ -190,7 +199,7 @@ function BackgroundVideo() {
   )
 }
 
-function FooterContent({ lang }) {
+function FooterContent({ lang, scrollToSection }) {
   const t = translations[lang]
 
   return (
@@ -229,10 +238,18 @@ function FooterContent({ lang }) {
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, delay: 1, ease: EASE }}
           >
-            <button className="btn btn-primary" type="button">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => scrollToSection('roles')}
+            >
               {t.btnFeatures}
             </button>
-            <button className="btn btn-ghost" type="button">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => scrollToSection('how')}
+            >
               {t.btnHowItWorks}
             </button>
           </motion.div>
@@ -252,7 +269,7 @@ function RolesSection({ lang }) {
   const t = translations[lang]
 
   return (
-    <section className="section roles-section">
+    <section className="section roles-section" id="roles">
       <div className="section-inner">
         <h2 className="section-heading">{t.rolesHeading}</h2>
         <p className="section-description">{t.rolesDescription}</p>
@@ -280,7 +297,7 @@ function HowItWorksSection({ lang }) {
   const t = translations[lang]
 
   return (
-    <section className="section how-section">
+    <section className="section how-section" id="how">
       <div className="section-inner">
         <h2 className="section-heading">{t.howHeading}</h2>
 
@@ -310,7 +327,7 @@ function TrustSection({ lang }) {
   const t = translations[lang]
 
   return (
-    <section className="section trust-section">
+    <section className="section trust-section" id="trust">
       <div className="section-inner">
         <h2 className="section-heading">{t.trustHeading}</h2>
 
@@ -335,18 +352,35 @@ function TrustSection({ lang }) {
 
 export default function App() {
   const [lang, setLang] = useState('ru')
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('vnx-theme')
+    return saved || 'light'
+  })
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light'
+    setTheme(newTheme)
+    localStorage.setItem('vnx-theme', newTheme)
+  }
+
+  const scrollToSection = (id) => {
+    document.getElementById(id)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    })
+  }
 
   return (
-    <>
+    <div data-theme={theme}>
       <div className="hero" id="top">
         <BackgroundVideo />
-        <Navbar lang={lang} setLang={setLang} />
-        <FooterContent lang={lang} />
+        <Navbar lang={lang} setLang={setLang} theme={theme} toggleTheme={toggleTheme} />
+        <FooterContent lang={lang} scrollToSection={scrollToSection} />
       </div>
 
       <RolesSection lang={lang} />
       <HowItWorksSection lang={lang} />
       <TrustSection lang={lang} />
-    </>
+    </div>
   )
 }
