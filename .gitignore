@@ -1,5 +1,6 @@
 # Secrets
 .env
+.env.local
 google_credentials.json
 
 # Database & Logs
@@ -10,9 +11,30 @@ data/
 *.log
 downloads/
 
-# Python Cache
+# Python
 __pycache__/
+*.py[cod]
 *.pyc
+*.so
 venv/
+env/
+ENV/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+dist-ssr/
+*.local
+
+# IDEs
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
