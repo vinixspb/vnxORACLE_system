@@ -48,7 +48,7 @@ class AIEngine:
 
     async def get_response(self, messages, model, user_tariff="START", image_path=None):
         client = self._get_client(user_tariff)
-        if not client: return "⚠️ Ошибка системы: Нет ключей.", 0
+        if not client: return "⚠️ Ошибка системы: Нет ключей.", 0, model
 
         current_messages = list(messages)
         if not current_messages or current_messages[0].get('role') != 'system':
@@ -88,9 +88,8 @@ class AIEngine:
                 
                 answer = response.choices[0].message.content
                 if current_model != model:
-                    short_name = current_model.split('/')[-1].replace(":free", "")
-                    answer += f"\n\n<i>(🛡 Auto-Switch: {short_name})</i>"
-                return answer, response.usage.total_tokens
+                    logger.info(f"🛡 Auto-Switch: {model} -> {current_model}")
+                return answer, response.usage.total_tokens, current_model
 
             except APIStatusError as e:
                 error_code = e.status_code
@@ -123,7 +122,7 @@ class AIEngine:
 
                 if attempt >= max_retries:
                     logger.error("❌ Survival Loop Failed.")
-                    return "⚠️ <b>Все каналы перегружены.</b>\nПовторите запрос позже или выберите другую модель.", 0
+                    return "⚠️ <b>Все каналы перегружены.</b>\nПовторите запрос позже или выберите другую модель.", 0, current_model
 
                 # Ищем замену, передавая список забаненных брендов
                 new_model = await find_best_replacement(
@@ -141,9 +140,9 @@ class AIEngine:
 
             except Exception as e:
                 logger.error(f"Critical: {e}")
-                return "⚠️ Критическая ошибка.", 0
-        
-        return "⚠️ Нет ответа.", 0
+                return "⚠️ Критическая ошибка.", 0, current_model
+
+        return "⚠️ Нет ответа.", 0, current_model
 
     async def transcribe_audio(self, file_path):
         if not self.client_audio: return None

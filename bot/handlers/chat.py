@@ -49,17 +49,17 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
     model = USER_MODELS.get(user_id, config.DEFAULT_MODEL)
 
     try:
-        ai_response, tokens_spent = await ai_engine.get_response(
-            messages=full_context, 
-            model=model, 
-            user_tariff=user_tariff, 
+        ai_response, tokens_spent, used_model = await ai_engine.get_response(
+            messages=full_context,
+            model=model,
+            user_tariff=user_tariff,
             image_path=image_path
         )
-        
-        db.add_message(session_id, "assistant", ai_response, model=model)
+
+        db.add_message(session_id, "assistant", ai_response, model=used_model)
         db.update_tokens(user_id, tokens_spent)
-        
-        model_name = model.split('/')[-1].replace(":free", "")
+
+        model_name = used_model.split('/')[-1].replace(":free", "")
         safe_response = escape_html(ai_response)
         
         final_text = f"{safe_response}\n\n<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {db.get_total_tokens(user_id)}</blockquote>"
