@@ -71,4 +71,19 @@ def load_prompt(filename: str) -> str:
             return f.read()
     return ""
 
+# Trinity промпты
+TRINITY_SOUL = load_prompt("trinity_soul.md")
+WEBSITE_CONTEXT = load_prompt("website_context.md")
 SALES_CONSULTANT_PROMPT = load_prompt("sales_consultant.txt")
+
+# Собираем полный промпт Trinity
+TRINITY_FULL_PROMPT = f"""{SALES_CONSULTANT_PROMPT}
+
+---
+
+# ДОПОЛНИТЕЛЬНЫЙ КОНТЕКСТ
+
+{TRINITY_SOUL}
+
+{WEBSITE_CONTEXT}
+"""

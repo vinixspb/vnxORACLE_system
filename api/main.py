@@ -8,6 +8,7 @@ import config
 import config_media
 from services import ai_service, sheets_service, conversation_manager, rate_limiter
 from services.kie_client import kie_client
+from services.formatting import md_to_html
 
 # Настройка логирования
 logging.basicConfig(
@@ -134,11 +135,11 @@ async def chat(request: ChatRequest, http_request: Request):
         # Получаем полную историю для LLM
         messages = conversation_manager.get_messages(session_id)
 
-        # Добавляем system prompt, если его ещё нет (должен быть первым сообщением)
+        # Добавляем system prompt Trinity, если его ещё нет (должен быть первым сообщением)
         if not messages or messages[0].get("role") != "system":
             messages.insert(0, {
                 "role": "system",
-                "content": config.SALES_CONSULTANT_PROMPT
+                "content": config.TRINITY_FULL_PROMPT
             })
 
         # Генерируем ответ через AI
@@ -147,7 +148,10 @@ async def chat(request: ChatRequest, http_request: Request):
             tier="START"  # Для web-чата используем START тариф
         )
 
-        # Добавляем ответ AI в историю
+        # Конвертируем Markdown → HTML для правильного отображения в виджете
+        response_html = md_to_html(response_text)
+
+        # Добавляем ответ AI в историю (сохраняем оригинальный Markdown)
         conversation_manager.add_message(
             session_id=session_id,
             role="assistant",
@@ -163,7 +167,7 @@ async def chat(request: ChatRequest, http_request: Request):
         )
 
         return ChatResponse(
-            response=response_text,
+            response=response_html,  # Отправляем HTML-версию клиенту
             session_id=session_id,
             needs_contact=needs_contact
         )
