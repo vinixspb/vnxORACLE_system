@@ -2,10 +2,12 @@ import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 import config
+import config_media
 from services import ai_service, sheets_service, conversation_manager, rate_limiter
+from services.kie_client import kie_client
 
 # Настройка логирования
 logging.basicConfig(
@@ -60,6 +62,20 @@ class HealthResponse(BaseModel):
     status: str
     timestamp: str
     services: dict
+
+class ImageModelsResponse(BaseModel):
+    models: Dict[str, dict]
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=2000)
+    model: str = Field(default=config_media.DEFAULT_IMG_MODEL)
+    ratio: str = Field(default="square", pattern="^(vertical|horizontal|square)$")
+
+class ImageGenerateResponse(BaseModel):
+    success: bool
+    image_url: Optional[str] = None
+    task_id: Optional[str] = None
+    error: Optional[str] = None
 
 # =========================================================
 # ENDPOINTS
@@ -197,6 +213,58 @@ async def capture_lead(request: LeadCaptureRequest, http_request: Request):
         raise
     except Exception as e:
         logger.error(f"❌ Lead capture error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/image/models", response_model=ImageModelsResponse)
+async def get_image_models():
+    """Список доступных моделей для генерации изображений"""
+    return ImageModelsResponse(models=config_media.IMAGE_MODELS)
+
+@app.post("/api/image/generate", response_model=ImageGenerateResponse)
+async def generate_image(request: ImageGenerateRequest, http_request: Request):
+    """
+    Генерация изображения через KIE API
+
+    1. Проверяет rate limit
+    2. Отправляет запрос в KIE
+    3. Дожидается результата
+    4. Возвращает URL готового изображения
+    """
+    rate_limiter.check(http_request)
+
+    try:
+        if not config_media.KIE_API_KEY:
+            raise HTTPException(
+                status_code=503,
+                detail="Image generation service not configured"
+            )
+
+        logger.info(f"🎨 Image generation: model={request.model}, ratio={request.ratio}")
+
+        image_url, task_id = await kie_client.generate_image(
+            prompt=request.prompt,
+            model=request.model,
+            ratio=request.ratio
+        )
+
+        if image_url:
+            logger.info(f"✅ Image generated: {task_id}")
+            return ImageGenerateResponse(
+                success=True,
+                image_url=image_url,
+                task_id=task_id
+            )
+        else:
+            logger.error(f"❌ Image generation failed: {task_id}")
+            return ImageGenerateResponse(
+                success=False,
+                error="Generation failed or timed out"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Image generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
