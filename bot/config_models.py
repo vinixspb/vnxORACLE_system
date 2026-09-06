@@ -9,14 +9,16 @@ FALLBACK_MODEL = "mistralai/mistral-7b-instruct:free"
 FALLBACK_NAME = "Mistral 7B (Core)"
 
 # --- ДЕФОЛТНАЯ МОДЕЛЬ ---
-DEFAULT_MODEL_ID = "google/gemini-2.0-flash-001"  # 🔥 БЕСПЛАТНО!
+# gemini-2.0-flash-001 снят с OpenRouter (404 "No endpoints found"), из-за
+# чего каждый первый запрос уходил в Survival Loop. 3.8-flash проверен в бою.
+DEFAULT_MODEL_ID = "google/gemini-3.8-flash"
 
 # =========================================================
 # 💠 ТАРИФ START (Бесплатные и дешевые)
 # =========================================================
 MODELS_START = [
     # 🌐 Google Gemini (БЕСПЛАТНО!)
-    ("💎 Gemini 2.0 Flash (Рекомендуем)", "google/gemini-2.0-flash-001"),
+    ("💎 Gemini 3.8 Flash (Рекомендуем)", "google/gemini-3.8-flash"),
     ("💎 Gemini 2.5 Flash", "google/gemini-2.5-flash"),
     
     # 🔬 DeepSeek (Очень дешево)

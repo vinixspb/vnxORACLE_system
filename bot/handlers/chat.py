@@ -1,6 +1,5 @@
 import os
 import logging
-import html
 import keyboards
 import config
 import urllib.parse
@@ -8,16 +7,33 @@ from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 from loader import sheets_mgr, ai_engine, db, USER_MODELS
+from services.formatting import md_to_html
 
 from keyboards.ai_video import get_video_menu_keyboard
 
 logger = logging.getLogger(__name__)
 
 # --- Вспомогательная функция для безопасной отправки текста ---
-def escape_html(text):
-    if text is None:
-        return ""
-    return html.escape(str(text))
+# Короткие просьбы вида «покажи меню» / «где кнопки» — их обрабатываем кодом.
+# Требуем и намерение, и объект, чтобы «расскажи про кнопки в нашем боте
+# поддержки» ушло в диалог, а не открыло меню.
+_MENU_INTENT = ("покажи", "показать", "открой", "открыть", "дай", "выведи",
+                "верни", "где", "хочу", "нужно", "покаж", "show", "открой-ка")
+_MENU_OBJECT = ("меню", "кнопк", "клавиатур", "menu", "button", "keyboard")
+
+
+def is_menu_request(text: str) -> bool:
+    if not text:
+        return False
+    low = text.lower().strip(" .!?…")
+    if len(low.split()) > 4:
+        return False
+    if not any(obj in low for obj in _MENU_OBJECT):
+        return False
+    # «меню» одним словом — тоже явная просьба
+    return low in ("меню", "кнопки", "menu", "buttons") or any(
+        intent in low for intent in _MENU_INTENT
+    )
 
 async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE, input_text: str, image_path: str = None):
     """
@@ -60,8 +76,8 @@ async def process_ai_request(update: Update, context: ContextTypes.DEFAULT_TYPE,
         db.update_tokens(user_id, tokens_spent)
 
         model_name = used_model.split('/')[-1].replace(":free", "")
-        safe_response = escape_html(ai_response)
-        
+        safe_response = md_to_html(ai_response)
+
         final_text = f"{safe_response}\n\n<blockquote>⚙️ {model_name} | 🎫 {tokens_spent} | ∑ {db.get_total_tokens(user_id)}</blockquote>"
         await update.message.reply_text(final_text, parse_mode='HTML')
         
@@ -163,6 +179,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == config.BTN_TARIFFS:
         context.user_data['mode'] = None
         await send_paywall(update)
+        return
+
+    # Просьбу показать меню/кнопки разбираем кодом, а не ИИ: модель не умеет
+    # рисовать клавиатуру и вместо этого пересказывает её словами.
+    if is_menu_request(text):
+        context.user_data['mode'] = None
+        await update.message.reply_text(
+            "🧩 <b>МЕНЮ ВОЗМОЖНОСТЕЙ</b>\n"
+            "<i>Выберите режим — или просто напишите задачу словами.</i>",
+            reply_markup=keyboards.get_features_keyboard(),
+            parse_mode='HTML'
+        )
+        await update.message.reply_text(
+            "⌨️ <b>Быстрые кнопки</b> закреплены под полем ввода.",
+            reply_markup=keyboards.get_main_keyboard(),
+            parse_mode='HTML'
+        )
         return
 
     if text == config.BTN_OPENCLAW:
