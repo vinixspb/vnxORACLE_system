@@ -6,7 +6,9 @@ import './ChatWidget.css'
 import './liquid-glass-fab.css'
 
 const EASE = [0.16, 1, 0.3, 1]
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+// Порт 8001: 8000 занят другими сервисами на обоих серверах.
+// В production задаётся через VITE_API_URL на этапе сборки.
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001'
 
 const translations = {
   en: {
@@ -77,7 +79,10 @@ export default function ChatWidget({ lang = 'ru', theme = 'dark', onHandoff, ope
     }
 
     return () => {
-      fabInstanceRef.current?.destroy()
+      if (fabInstanceRef.current) {
+        fabInstanceRef.current.destroy()
+        fabInstanceRef.current = null
+      }
     }
   }, [])
 

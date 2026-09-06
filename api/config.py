@@ -50,6 +50,13 @@ RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 MAX_MESSAGES_PER_SESSION = int(os.getenv("MAX_MESSAGES_PER_SESSION", "40"))
 # Максимальная длина одного сообщения в символах
 MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "2000"))
+# IP, от которых принимаем X-Forwarded-For. Заголовок подделывается любым
+# клиентом, поэтому доверяем ему только от своего reverse-proxy (Caddy).
+TRUSTED_PROXIES = {
+    ip.strip()
+    for ip in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",")
+    if ip.strip()
+}
 
 # =========================================================
 # 📋 SYSTEM PROMPTS

@@ -12,8 +12,12 @@ class RateLimiter:
     Простой in-memory rate limiter по IP (sliding window).
 
     Защищает /api/chat от накрутки: endpoint публичный, а каждый
-    запрос тратит токены OpenRouter. Готов к замене на Redis,
-    когда появится несколько воркеров.
+    запрос тратит токены OpenRouter.
+
+    ВНИМАНИЕ: счётчик живёт в памяти процесса. При uvicorn --workers N
+    фактический лимит равен RATE_LIMIT_REQUESTS * N, потому что воркеры
+    не видят счётчиков друг друга. Для строгого лимита нужен Redis либо
+    один воркер.
     """
 
     def __init__(self):
@@ -22,13 +26,19 @@ class RateLimiter:
 
     def _client_ip(self, request: Request) -> str:
         """
-        IP клиента с учётом nginx-прокси.
-        X-Forwarded-For может содержать цепочку — берём первый адрес.
+        IP клиента. X-Forwarded-For принимаем только от доверенного прокси:
+        заголовок задаёт кто угодно, поэтому при прямом доступе к порту его
+        подмена обнуляла бы лимит (новый «IP» на каждый запрос).
         """
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+        peer = request.client.host if request.client else "unknown"
+
+        if peer in config.TRUSTED_PROXIES:
+            forwarded = request.headers.get("x-forwarded-for")
+            if forwarded:
+                # Цепочка вида "client, proxy1, proxy2" — клиент первым
+                return forwarded.split(",")[0].strip()
+
+        return peer
 
     def check(self, request: Request) -> None:
         """Бросает HTTPException 429, если лимит превышен."""
