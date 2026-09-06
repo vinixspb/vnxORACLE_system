@@ -1,93 +1,17 @@
 import { motion } from 'motion/react'
 import { Plus, Moon, Sun } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { translations } from './i18n'
+import DirectionsSection from './components/DirectionsSection'
+import OnboardingSection, { emptyConfig } from './components/OnboardingSection'
+import { deriveConfigFromMessages } from './configFromChat'
 import './App.css'
+import ChatWidget from './components/ChatWidget'
 
 const EASE = [0.16, 1, 0.3, 1]
 
 const VIDEO_URL =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260508_215831_c6a8989c-d716-4d8d-8745-e972a2eec711.mp4'
-
-const translations = {
-  en: {
-    brand: 'vnxORACLE',
-    menu: 'Menu',
-    tagAdvanced: 'Digital Workforce',
-    tagCognitive: 'Cognitive AI',
-    adaptiveSystems: 'B2B Solutions',
-    subtitle: '• The Future of Corporate Hiring 2026',
-    heading: ['Hire Intelligence.', 'Rent Results.'],
-    btnFeatures: 'Who We Offer?',
-    btnHowItWorks: 'How Rental Works',
-    tag1: 'LLM Models',
-    tag2: 'Deep Integration',
-    tag3: '24/7 Automation',
-    // Section 2: Roles
-    rolesHeading: 'Who are you hiring?',
-    rolesDescription: "We don't sell chatbots. We rent ready-made specialists already trained to solve tasks in your niche.",
-    role1Title: 'Technical Support Specialist (L1/L2)',
-    role1Desc: "Instantly closes 80% of tickets. Knows all documentation. Never gets tired.",
-    role2Title: 'Sales Manager',
-    role2Desc: 'Qualifies leads, consults on catalog, drives to payment.',
-    role3Title: 'Internal Assistant (HR/Office)',
-    role3Desc: 'Helps your live employees find regulations and onboard newcomers.',
-    // Section 3: How it works
-    howHeading: 'Employee as a Service (EaaS)',
-    howStep1Title: 'Interview',
-    howStep1Desc: 'You tell us what tasks the digital employee should handle and which databases to access.',
-    howStep2Title: 'Training',
-    howStep2Desc: 'We deploy the vnxORACLE core, train the neural network on your specifics, and integrate into your processes.',
-    howStep3Title: 'Going Live',
-    howStep3Desc: 'The employee starts working for a fixed subscription fee. No sick leave, taxes, or vacations.',
-    // Section 4: Trust
-    trustHeading: 'Intelligence you can trust your business with.',
-    trustPoint1Title: 'Isolated Memory',
-    trustPoint1Desc: 'Your company data stays within your perimeter only.',
-    trustPoint2Title: 'Controlled Logic',
-    trustPoint2Desc: "The employee doesn't hallucinate and strictly follows the assigned Tone of Voice.",
-    trustPoint3Title: 'Continuous Evolution',
-    trustPoint3Desc: 'You get AI core updates automatically, with no hidden development fees.'
-  },
-  ru: {
-    brand: 'vnxORACLE',
-    menu: 'Меню',
-    tagAdvanced: 'Цифровой Штат',
-    tagCognitive: 'Когнитивный ИИ',
-    adaptiveSystems: 'B2B Решения',
-    subtitle: '• Будущее корпоративного найма 2026',
-    heading: ['Нанимайте Интеллект.', 'Арендуйте Результат.'],
-    btnFeatures: 'Кого мы предлагаем?',
-    btnHowItWorks: 'Как работает аренда',
-    tag1: 'LLM-Модели',
-    tag2: 'Глубокая Интеграция',
-    tag3: 'Автоматизация 24/7',
-    // Section 2: Roles
-    rolesHeading: 'Кого вы берете в команду?',
-    rolesDescription: 'Мы не продаем чат-ботов. Мы сдаем в аренду готовых специалистов, которые уже обучены решать задачи вашей ниши.',
-    role1Title: 'Специалист Техподдержки (L1/L2)',
-    role1Desc: 'Мгновенно закрывает 80% тикетов. Знает всю документацию. Не устает.',
-    role2Title: 'Менеджер по Продажам',
-    role2Desc: 'Квалифицирует лидов, консультирует по каталогу, доводит до оплаты.',
-    role3Title: 'Внутренний Ассистент (HR/Офис)',
-    role3Desc: 'Помогает вашим живым сотрудникам находить регламенты и онбордить новичков.',
-    // Section 3: How it works
-    howHeading: 'Сотрудник как Услуга (EaaS)',
-    howStep1Title: 'Собеседование',
-    howStep1Desc: 'Вы рассказываете, какие задачи должен закрывать цифровой сотрудник и к каким базам данных иметь доступ.',
-    howStep2Title: 'Стажировка',
-    howStep2Desc: 'Мы разворачиваем ядро на базе vnxORACLE, обучаем нейросеть вашей специфике и интегрируем в ваши процессы.',
-    howStep3Title: 'Выход на работу',
-    howStep3Desc: 'Сотрудник начинает работу за фиксированную абонентскую плату. Никаких больничных, налогов и отпусков.',
-    // Section 4: Trust
-    trustHeading: 'Разум, которому можно доверить бизнес.',
-    trustPoint1Title: 'Изолированная память',
-    trustPoint1Desc: 'Данные вашей компании остаются только внутри вашего контура.',
-    trustPoint2Title: 'Управляемая логика',
-    trustPoint2Desc: 'Сотрудник не галлюцинирует и строго следует заданному Tone of Voice.',
-    trustPoint3Title: 'Непрерывная эволюция',
-    trustPoint3Desc: 'Вы получаете апдейты AI-ядра автоматически, без скрытых платежей за разработку.'
-  }
-}
 
 function LogoMark() {
   return (
@@ -356,6 +280,9 @@ export default function App() {
     const saved = localStorage.getItem('vnx-theme')
     return saved || 'light'
   })
+  const [config, setConfig] = useState(emptyConfig)
+  const [prefilled, setPrefilled] = useState(() => new Set())
+  const [chatOpen, setChatOpen] = useState(0)
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
@@ -370,6 +297,33 @@ export default function App() {
     })
   }
 
+  const t = translations[lang]
+  const roleOptions =
+    t.onboarding.steps
+      .find((step) => step.id === 'employee')
+      ?.fields.find((field) => field.id === 'agentRoleField')?.options ?? []
+
+  // Диалог с ИИ-консультантом → предзаполненный конфигуратор.
+  const handleHandoff = useCallback(
+    (userMessages) => {
+      const patch = deriveConfigFromMessages(userMessages, roleOptions)
+      const filled = Object.entries(patch).filter(([, value]) => value)
+
+      setConfig((prev) => ({ ...prev, ...Object.fromEntries(filled) }))
+      setPrefilled(new Set(filled.map(([key]) => key)))
+      scrollToSection('configure')
+    },
+    [roleOptions]
+  )
+
+  const handleDirectionSelect = useCallback((item) => {
+    setConfig((prev) => ({
+      ...prev,
+      channel: item.id === 'messengers' ? 'Telegram' : item.id === 'web' ? 'Website widget' : prev.channel
+    }))
+    scrollToSection('configure')
+  }, [])
+
   return (
     <div data-theme={theme}>
       <div className="hero" id="top">
@@ -378,9 +332,20 @@ export default function App() {
         <FooterContent lang={lang} scrollToSection={scrollToSection} />
       </div>
 
+      <DirectionsSection t={t} onSelect={handleDirectionSelect} />
       <RolesSection lang={lang} />
       <HowItWorksSection lang={lang} />
       <TrustSection lang={lang} />
+
+      <OnboardingSection
+        t={t}
+        config={config}
+        setConfig={setConfig}
+        prefilled={prefilled}
+        onTestDialog={() => setChatOpen((n) => n + 1)}
+      />
+
+      <ChatWidget lang={lang} theme={theme} onHandoff={handleHandoff} openSignal={chatOpen} />
     </div>
   )
 }

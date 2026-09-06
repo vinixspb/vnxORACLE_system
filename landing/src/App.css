@@ -600,4 +600,471 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 32px;
   }
+
+  .directions-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+
+  .agent-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .form-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------------
+   Directions ("What we do") — карточки направлений
+--------------------------------------------------------------- */
+
+.directions-section {
+  background-color: var(--color-bg-primary);
+}
+
+.directions-head {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 48px;
+}
+
+.directions-heading {
+  margin-bottom: 12px;
+}
+
+.directions-subheading {
+  font-size: clamp(0.95rem, 2.6vw, 1.125rem);
+  line-height: 1.55;
+  color: var(--color-text-tertiary);
+  margin: 0;
+  transition: color 0.3s ease;
+}
+
+.directions-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.direction-card {
+  display: flex;
+  flex-direction: column;
+  padding: 32px 26px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.direction-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+.direction-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.direction-title {
+  font-size: clamp(1.0625rem, 2.6vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+  color: var(--color-text-primary);
+  transition: color 0.3s ease;
+}
+
+.direction-desc {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--color-text-tertiary);
+  margin: 0 0 18px;
+  transition: color 0.3s ease;
+}
+
+.direction-bullets {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.direction-bullet {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  transition: color 0.3s ease;
+}
+
+.direction-bullet svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.direction-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+  padding: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: gap 0.2s ease, opacity 0.2s ease;
+}
+
+.direction-link:hover {
+  gap: 12px;
+  opacity: 0.72;
+}
+
+/* ---------------------------------------------------------------
+   Onboarding configurator (Configuration Checklist)
+--------------------------------------------------------------- */
+
+.onboarding-section {
+  background-color: var(--color-bg-secondary);
+}
+
+.onboarding-inner {
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 22px;
+  margin-bottom: 22px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.agent-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.agent-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background-color: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  font-size: 18px;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.agent-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  transition: color 0.3s ease;
+}
+
+.agent-role {
+  font-size: 12.5px;
+  color: var(--color-text-tertiary);
+  transition: color 0.3s ease;
+}
+
+.agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-soft,
+.btn-outline,
+.btn-solid {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-soft {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-tertiary);
+}
+
+.btn-soft:hover {
+  color: var(--color-text-primary);
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 30%, transparent);
+}
+
+.btn-outline:hover {
+  background-color: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+}
+
+.btn-solid {
+  background-color: var(--color-text-primary);
+  color: var(--color-bg-primary);
+}
+
+.btn-solid:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--color-text-primary) 26%, transparent);
+}
+
+.onboarding-heading {
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  margin: 40px 0 8px;
+  color: var(--color-text-primary);
+  transition: color 0.3s ease;
+}
+
+.onboarding-subheading {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--color-text-tertiary);
+  margin: 0 0 24px;
+  transition: color 0.3s ease;
+}
+
+.form-note {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+/* Сворачиваемые панели чек-листа */
+
+.panel {
+  margin-bottom: 14px;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 18px 20px;
+  background: none;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.panel-head:hover {
+  background-color: color-mix(in srgb, var(--color-text-primary) 3%, transparent);
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15.5px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.panel-body {
+  padding: 4px 20px 22px;
+  border-top: 1px solid var(--color-border);
+}
+
+.panel-footer {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+/* Поля формы */
+
+.form-row {
+  margin-top: 18px;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  transition: color 0.3s ease;
+}
+
+.form-hint {
+  margin: 0 0 9px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
+  transition: color 0.3s ease;
+}
+
+.form-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-transform: none;
+}
+
+.form-input {
+  width: 100%;
+  padding: 11px 13px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease, color 0.3s ease;
+}
+
+.form-input::placeholder {
+  color: color-mix(in srgb, var(--color-text-primary) 34%, transparent);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--color-text-primary) 52%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-text-primary) 9%, transparent);
+}
+
+.form-input.is-prefilled {
+  border-color: color-mix(in srgb, var(--color-text-primary) 38%, transparent);
+  background-color: color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+}
+
+textarea.form-input {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.btn-link {
+  padding: 0;
+  background: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: opacity 0.2s ease;
+}
+
+.btn-link:hover {
+  opacity: 0.68;
+}
+
+.btn-link-muted {
+  color: var(--color-text-tertiary);
+  text-decoration: none;
+  margin-left: auto;
+}
+
+/* Handoff из чата в конфигуратор */
+
+.chat-handoff {
+  padding: 14px 16px;
+  border-top: 1px solid var(--color-border);
+  background-color: color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+}
+
+.chat-handoff-text {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.chat-handoff-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background-color: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: gap 0.2s ease, transform 0.2s ease;
+}
+
+.chat-handoff-btn:hover {
+  gap: 11px;
+  transform: translateY(-1px);
 }
