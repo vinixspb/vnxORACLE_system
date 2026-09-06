@@ -26,17 +26,27 @@ class RateLimiter:
 
     def _client_ip(self, request: Request) -> str:
         """
-        IP клиента. X-Forwarded-For принимаем только от доверенного прокси:
-        заголовок задаёт кто угодно, поэтому при прямом доступе к порту его
-        подмена обнуляла бы лимит (новый «IP» на каждый запрос).
+        IP клиента. Заголовки с адресом принимаем только от доверенного прокси:
+        их задаёт кто угодно, поэтому при прямом доступе к порту подмена
+        обнуляла бы лимит (новый «IP» на каждый запрос).
+
+        За Cloudflare предпочитаем CF-Connecting-IP: он содержит ровно один
+        адрес и его выставляет сам Cloudflare, тогда как X-Forwarded-For
+        пришедший от клиента Cloudflare лишь дополняет.
         """
         peer = request.client.host if request.client else "unknown"
 
-        if peer in config.TRUSTED_PROXIES:
-            forwarded = request.headers.get("x-forwarded-for")
-            if forwarded:
-                # Цепочка вида "client, proxy1, proxy2" — клиент первым
-                return forwarded.split(",")[0].strip()
+        if peer not in config.TRUSTED_PROXIES:
+            return peer
+
+        cf_ip = request.headers.get("cf-connecting-ip")
+        if cf_ip:
+            return cf_ip.strip()
+
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            # Цепочка вида "client, proxy1, proxy2" — клиент первым
+            return forwarded.split(",")[0].strip()
 
         return peer
 

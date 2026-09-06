@@ -1,18 +1,22 @@
 [Unit]
-Description=vnxORACLE Web API (Sales Consultant)
+Description=vnxORACLE Web API
 After=network.target
 
 [Service]
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/opt/vnxORACLE_system/api
-Environment="PATH=/opt/vnxORACLE_system/api/venv/bin"
-ExecStart=/opt/vnxORACLE_system/api/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+WorkingDirectory=/opt/vnxORACLE_aibot/web_api
+Environment="PATH=/opt/vnxORACLE_aibot/web_api/venv/bin"
+# База лежит вне git-клона и делится с Telegram-ботом
+Environment="ORACLE_DB_PATH=/opt/vnxORACLE_aibot/oracle.db"
+# 127.0.0.1, а не 0.0.0.0: наружу API выходит только через Caddy.
+# Порт 8001 — 8000 занят другими сервисами.
+# --workers 2 умножает лимит rate limiter на 2 (счётчик в памяти процесса);
+# для строгого лимита нужен один воркер либо Redis.
+ExecStart=/opt/vnxORACLE_aibot/web_api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 2
 Restart=always
 RestartSec=10
-StandardOutput=append:/var/log/vnxoracle-api/output.log
-StandardError=append:/var/log/vnxoracle-api/error.log
 
 # Security
 NoNewPrivileges=true
