@@ -3,6 +3,9 @@ import { Plus, Moon, Sun } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { translations } from './i18n'
 import DirectionsSection from './components/DirectionsSection'
+import ProblemsSection from './components/ProblemsSection'
+import SolutionSection from './components/SolutionSection'
+import UnderTheHoodSection from './components/UnderTheHoodSection'
 import OnboardingSection, { emptyConfig } from './components/OnboardingSection'
 import { deriveConfigFromMessages } from './configFromChat'
 import './App.css'
@@ -32,25 +35,7 @@ function LogoMark() {
   )
 }
 
-function DotGridIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <circle cx="3.5" cy="3.5" r="1.6" fill="currentColor" />
-      <circle cx="8.5" cy="3.5" r="1.6" fill="currentColor" />
-      <circle cx="3.5" cy="8.5" r="1.6" fill="currentColor" />
-      <circle cx="8.5" cy="8.5" r="1.6" fill="currentColor" />
-    </svg>
-  )
-}
-
-function Navbar({ lang, setLang, theme, toggleTheme }) {
+function Navbar({ lang, setLang, theme, toggleTheme, onCreateBot }) {
   const t = translations[lang]
 
   return (
@@ -97,12 +82,13 @@ function Navbar({ lang, setLang, theme, toggleTheme }) {
           {lang === 'en' ? 'RU' : 'EN'}
         </button>
 
-        <div className="right-pill">
-          <button className="right-pill-button" type="button" aria-label={t.adaptiveSystems}>
-            <DotGridIcon />
-          </button>
-          <span className="right-pill-label">{t.adaptiveSystems}</span>
-        </div>
+        <button className="btn btn-ghost-nav" type="button">
+          {t.navDemo}
+        </button>
+
+        <button className="btn btn-primary-nav" type="button" onClick={onCreateBot}>
+          {t.navCreateBot}
+        </button>
       </div>
     </motion.nav>
   )
@@ -123,7 +109,7 @@ function BackgroundVideo() {
   )
 }
 
-function FooterContent({ lang, scrollToSection }) {
+function FooterContent({ lang, scrollToSection, onCreateBot }) {
   const t = translations[lang]
 
   return (
@@ -164,6 +150,13 @@ function FooterContent({ lang, scrollToSection }) {
           >
             <button
               className="btn btn-primary"
+              type="button"
+              onClick={onCreateBot}
+            >
+              {t.btnCreateBot}
+            </button>
+            <button
+              className="btn btn-ghost"
               type="button"
               onClick={() => scrollToSection('roles')}
             >
@@ -283,6 +276,7 @@ export default function App() {
   const [config, setConfig] = useState(emptyConfig)
   const [prefilled, setPrefilled] = useState(() => new Set())
   const [chatOpen, setChatOpen] = useState(0)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light'
@@ -295,6 +289,14 @@ export default function App() {
       behavior: 'smooth',
       block: 'start'
     })
+  }
+
+  const openOnboarding = () => {
+    setOnboardingOpen(true)
+  }
+
+  const closeOnboarding = () => {
+    setOnboardingOpen(false)
   }
 
   const t = translations[lang]
@@ -311,7 +313,7 @@ export default function App() {
 
       setConfig((prev) => ({ ...prev, ...Object.fromEntries(filled) }))
       setPrefilled(new Set(filled.map(([key]) => key)))
-      scrollToSection('configure')
+      setOnboardingOpen(true)
     },
     [roleOptions]
   )
@@ -321,29 +323,39 @@ export default function App() {
       ...prev,
       channel: item.id === 'messengers' ? 'Telegram' : item.id === 'web' ? 'Website widget' : prev.channel
     }))
-    scrollToSection('configure')
+    setOnboardingOpen(true)
   }, [])
 
   return (
     <div data-theme={theme}>
       <div className="hero" id="top">
         <BackgroundVideo />
-        <Navbar lang={lang} setLang={setLang} theme={theme} toggleTheme={toggleTheme} />
-        <FooterContent lang={lang} scrollToSection={scrollToSection} />
+        <Navbar lang={lang} setLang={setLang} theme={theme} toggleTheme={toggleTheme} onCreateBot={openOnboarding} />
+        <FooterContent lang={lang} scrollToSection={scrollToSection} onCreateBot={openOnboarding} />
       </div>
 
       <DirectionsSection t={t} onSelect={handleDirectionSelect} />
+      <ProblemsSection t={t} />
+      <SolutionSection t={t} />
       <RolesSection lang={lang} />
       <HowItWorksSection lang={lang} />
+      <UnderTheHoodSection t={t} />
       <TrustSection lang={lang} />
 
-      <OnboardingSection
-        t={t}
-        config={config}
-        setConfig={setConfig}
-        prefilled={prefilled}
-        onTestDialog={() => setChatOpen((n) => n + 1)}
-      />
+      {onboardingOpen && (
+        <div className="modal-overlay" onClick={closeOnboarding}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={closeOnboarding}>×</button>
+            <OnboardingSection
+              t={t}
+              config={config}
+              setConfig={setConfig}
+              prefilled={prefilled}
+              onTestDialog={() => setChatOpen((n) => n + 1)}
+            />
+          </div>
+        </div>
+      )}
 
       <ChatWidget lang={lang} theme={theme} onHandoff={handleHandoff} openSignal={chatOpen} />
     </div>

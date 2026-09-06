@@ -44,26 +44,26 @@
 
     /* Multi-layer transparency (Vision Pro materials) */
     background:
-        /* Dynamic caustics */
+        /* Dynamic caustics - much softer */
         radial-gradient(
             circle at var(--light-x, 35%) var(--light-y, 35%),
-            rgba(255,255,255,0.5),
-            rgba(255,255,255,0.15) 35%,
+            rgba(255,255,255,0.18),
+            rgba(255,255,255,0.08) 35%,
             transparent 60%
         ),
-        /* Fresnel rim - stronger at edges */
+        /* Fresnel rim - subtle edge glow */
         radial-gradient(
             circle at 50% 50%,
-            transparent 35%,
-            rgba(255,255,255,0.3) 65%,
-            rgba(255,255,255,0.6) 85%,
+            transparent 40%,
+            rgba(255,255,255,0.12) 70%,
+            rgba(255,255,255,0.25) 88%,
             transparent
         ),
-        /* Core color - very transparent */
+        /* Core color - minimal tint */
         radial-gradient(
             circle at 50% 60%,
-            rgba(255,255,255,0.08),
-            rgba(255,255,255,0.12)
+            rgba(180,230,255,0.05),
+            rgba(180,230,255,0.08)
         );
 
     /* Flatter lens effect */

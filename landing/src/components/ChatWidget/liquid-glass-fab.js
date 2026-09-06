@@ -85,32 +85,32 @@ export class LiquidGlassFAB {
         this.shineX = new SpringValue(0, 0.06, 0.85)
         this.shineY = new SpringValue(0, 0.06, 0.85)
 
-        // 8-corner morphing (faster response)
-        this.morphTL = new SpringValue(50, 0.12, 0.75)
-        this.morphTR = new SpringValue(50, 0.12, 0.75)
-        this.morphBR = new SpringValue(50, 0.12, 0.75)
-        this.morphBL = new SpringValue(50, 0.12, 0.75)
-        this.morphTLV = new SpringValue(50, 0.12, 0.75)
-        this.morphTRV = new SpringValue(50, 0.12, 0.75)
-        this.morphBRV = new SpringValue(50, 0.12, 0.75)
-        this.morphBLV = new SpringValue(50, 0.12, 0.75)
+        // 8-corner morphing (soft and fluid like water)
+        this.morphTL = new SpringValue(50, 0.14, 0.78)
+        this.morphTR = new SpringValue(50, 0.14, 0.78)
+        this.morphBR = new SpringValue(50, 0.14, 0.78)
+        this.morphBL = new SpringValue(50, 0.14, 0.78)
+        this.morphTLV = new SpringValue(50, 0.14, 0.78)
+        this.morphTRV = new SpringValue(50, 0.14, 0.78)
+        this.morphBRV = new SpringValue(50, 0.14, 0.78)
+        this.morphBLV = new SpringValue(50, 0.14, 0.78)
 
         // Translation
         this.translateX = new SpringValue(0, 0.08, 0.84)
         this.translateY = new SpringValue(0, 0.08, 0.84)
 
-        // Parallax for icon
-        this.parallaxX = new SpringValue(0, 0.12, 0.85)
-        this.parallaxY = new SpringValue(0, 0.12, 0.85)
+        // Parallax for icon (more fluid)
+        this.parallaxX = new SpringValue(0, 0.10, 0.88)
+        this.parallaxY = new SpringValue(0, 0.10, 0.88)
 
         this.isHovering = false
     }
 
     initEventListeners() {
-        this.onEnterBound = () => this.onEnter()
-        this.onLeaveBound = () => this.onLeave()
-        this.onMoveBound = (e) => this.onMove(e)
-        this.onClickBound = (e) => this.onClick(e)
+        this.onEnterBound = this.onEnter.bind(this)
+        this.onLeaveBound = this.onLeave.bind(this)
+        this.onMoveBound = this.onMove.bind(this)
+        this.onClickBound = this.onClick.bind(this)
 
         this.fab.addEventListener('pointerenter', this.onEnterBound)
         this.fab.addEventListener('pointerleave', this.onLeaveBound)
@@ -176,39 +176,39 @@ export class LiquidGlassFAB {
         this.translateX.set((x - centerX) * 0.05)
         this.translateY.set((y - centerY) * 0.05)
 
-        // Quadrant-based morphing
+        // Quadrant-based morphing (subtle deformation)
         if (normX < 50 && normY < 50) {
             // Top-left quadrant
-            this.morphTL.set(50 + deformAmount * 1.2)
-            this.morphTLV.set(50 + deformAmount * 1.2)
-            this.morphBR.set(50 - deformAmount * 0.7)
-            this.morphBRV.set(50 - deformAmount * 0.7)
-            this.morphTR.set(50 + deformAmount * 0.5)
-            this.morphBL.set(50 + deformAmount * 0.5)
+            this.morphTL.set(50 + deformAmount * 0.4)
+            this.morphTLV.set(50 + deformAmount * 0.4)
+            this.morphBR.set(50 - deformAmount * 0.3)
+            this.morphBRV.set(50 - deformAmount * 0.3)
+            this.morphTR.set(50 + deformAmount * 0.2)
+            this.morphBL.set(50 + deformAmount * 0.2)
         } else if (normX >= 50 && normY < 50) {
             // Top-right quadrant
-            this.morphTR.set(50 + deformAmount * 1.2)
-            this.morphTRV.set(50 + deformAmount * 1.2)
-            this.morphBL.set(50 - deformAmount * 0.7)
-            this.morphBLV.set(50 - deformAmount * 0.7)
-            this.morphTL.set(50 + deformAmount * 0.5)
-            this.morphBR.set(50 + deformAmount * 0.5)
+            this.morphTR.set(50 + deformAmount * 0.4)
+            this.morphTRV.set(50 + deformAmount * 0.4)
+            this.morphBL.set(50 - deformAmount * 0.3)
+            this.morphBLV.set(50 - deformAmount * 0.3)
+            this.morphTL.set(50 + deformAmount * 0.2)
+            this.morphBR.set(50 + deformAmount * 0.2)
         } else if (normX >= 50 && normY >= 50) {
             // Bottom-right quadrant
-            this.morphBR.set(50 + deformAmount * 1.2)
-            this.morphBRV.set(50 + deformAmount * 1.2)
-            this.morphTL.set(50 - deformAmount * 0.7)
-            this.morphTLV.set(50 - deformAmount * 0.7)
-            this.morphTR.set(50 + deformAmount * 0.5)
-            this.morphBL.set(50 + deformAmount * 0.5)
+            this.morphBR.set(50 + deformAmount * 0.4)
+            this.morphBRV.set(50 + deformAmount * 0.4)
+            this.morphTL.set(50 - deformAmount * 0.3)
+            this.morphTLV.set(50 - deformAmount * 0.3)
+            this.morphTR.set(50 + deformAmount * 0.2)
+            this.morphBL.set(50 + deformAmount * 0.2)
         } else {
             // Bottom-left quadrant
-            this.morphBL.set(50 + deformAmount * 1.2)
-            this.morphBLV.set(50 + deformAmount * 1.2)
-            this.morphTR.set(50 - deformAmount * 0.7)
-            this.morphTRV.set(50 - deformAmount * 0.7)
-            this.morphTL.set(50 + deformAmount * 0.5)
-            this.morphBR.set(50 + deformAmount * 0.5)
+            this.morphBL.set(50 + deformAmount * 0.4)
+            this.morphBLV.set(50 + deformAmount * 0.4)
+            this.morphTR.set(50 - deformAmount * 0.3)
+            this.morphTRV.set(50 - deformAmount * 0.3)
+            this.morphTL.set(50 + deformAmount * 0.2)
+            this.morphBR.set(50 + deformAmount * 0.2)
         }
     }
 
@@ -249,7 +249,10 @@ export class LiquidGlassFAB {
     }
 
     startAnimationLoop() {
+        this.isDestroyed = false
         const animate = () => {
+            if (this.isDestroyed) return
+
             // Update all springs
             ;[this.lightX, this.lightY, this.scale, this.shineX, this.shineY,
              this.morphTL, this.morphTR, this.morphBR, this.morphBL,
@@ -299,18 +302,23 @@ export class LiquidGlassFAB {
     }
 
     destroy() {
-        // Cancel animation loop
+        // Stop animation loop
+        this.isDestroyed = true
         if (this.animationFrame) {
             cancelAnimationFrame(this.animationFrame)
         }
 
         // Remove event listeners
-        this.fab.removeEventListener('pointerenter', this.onEnterBound)
-        this.fab.removeEventListener('pointerleave', this.onLeaveBound)
-        this.fab.removeEventListener('pointermove', this.onMoveBound)
-        this.fab.removeEventListener('click', this.onClickBound)
+        if (this.fab && this.onEnterBound) {
+            this.fab.removeEventListener('pointerenter', this.onEnterBound)
+            this.fab.removeEventListener('pointerleave', this.onLeaveBound)
+            this.fab.removeEventListener('pointermove', this.onMoveBound)
+            this.fab.removeEventListener('click', this.onClickBound)
+        }
 
         // Remove DOM
-        this.wrapper.remove()
+        if (this.wrapper && this.wrapper.parentNode) {
+            this.wrapper.remove()
+        }
     }
 }

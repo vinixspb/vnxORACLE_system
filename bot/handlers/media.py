@@ -56,7 +56,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE, pro
     context.user_data['img2img_source_path'] = None
 
     # 🔥 ВОЗВРАЩАЕМ QWEN: Telegraph-ссылки работают безотказно!
-    if is_img2img and ("nano-banana" in img_model.lower() or "seedream" in img_model.lower() or "flux" in img_model.lower()):
+    if is_img2img and ("flux" in img_model.lower() or "midjourney" in img_model.lower() or "qwen" in img_model.lower() or "dalle" in img_model.lower()):
         logger.info(f"🔄 Auto-Switch: Модель {img_model} перенаправлена на Qwen 2.0 (image-edit).")
         img_model = getattr(config, 'IMG_QWEN_2', "qwen-image-2")
     

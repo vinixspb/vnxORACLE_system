@@ -119,20 +119,22 @@ SYSTEM_PROMPT = (
 
 # --- ИЗОБРАЖЕНИЯ ---
 IMG_POLLINATIONS = "pollinations"                          # Бесплатно (Fallback)
-IMG_NANO_BANANA = "nano-banana-2"                          # Nano Banana 2 (Быстрая и точная)
-IMG_FLUX_SCHNELL = "flux-2/pro-text-to-image"              # Flux 2 Pro
-IMG_SEEDREAM = "bytedance/seedream-v4-text-to-image"       # Seedream 4.0
-IMG_QWEN_2 = "qwen-image-2"                                # 🆕 Qwen 2.0 (Идеально для текста на артах)
-IMG_GPT_4O = "gpt-4o-image/generate"                       # GPT-4o Image
+IMG_FLUX_PRO = "flux-2/pro-ultra"                          # 🔥 Flux 2 Pro Ultra (2026)
+IMG_MIDJOURNEY_7 = "midjourney-7/imagine"                  # 🎨 Midjourney v7 (Фотореализм)
+IMG_QWEN_VL = "qwen-vl-max-0809"                          # 🖌 Qwen VL Max (Текст на изображениях)
+IMG_DALLE_4 = "dall-e-4-vision"                           # 🌟 DALL-E 4 (Креативность)
+IMG_IDEOGRAM_3 = "ideogram-3/turbo"                       # ⚡️ Ideogram 3 Turbo (Типографика)
 
 # Модель по умолчанию
-DEFAULT_IMG_MODEL = IMG_NANO_BANANA
+DEFAULT_IMG_MODEL = IMG_FLUX_PRO
 
 # --- ВИДЕО ---
-VIDEO_KLING_3 = "kling-3-motion-control"                   # 🆕 Kling 3.0 (Кинематографичная анимация)
-VIDEO_GROK = "grok-video/generate"                         # Базовая видео-модель
+VIDEO_SORA_2 = "sora-2/turbo"                              # 🎬 Sora 2 Turbo (OpenAI, 2026)
+VIDEO_VEO_3 = "google/veo-3"                               # 🌊 Google Veo 3 (Реалистичные сцены)
+VIDEO_KLING_4 = "kling-4/pro"                              # 🎥 Kling 4 Pro (Китайский лидер)
+VIDEO_RUNWAY_5 = "runway/gen-5"                            # 🚀 Runway Gen-5 (Креативные эффекты)
 
-DEFAULT_VIDEO_MODEL = VIDEO_KLING_3
+DEFAULT_VIDEO_MODEL = VIDEO_SORA_2
 
 # =========================================================
 # 🎙 ГОЛОСОВЫЕ ТЕХНОЛОГИИ
@@ -155,7 +157,7 @@ TARIFF_INFO = {
         "💠 <b>TARIFF: START</b>\n<i>(Базовый доступ)</i>\n"
         "├ LLM: GPT-4o Mini\n"
         "├ Память: 10 msg\n"
-        "├ Art: Basic (Nano Banana, Flux)\n"
+        "├ Art: Flux 2 Ultra, DALL-E 4, Pollinations\n"
         "└ Цена: 190₽ / мес"
     ),
     "PRO": (
@@ -163,8 +165,8 @@ TARIFF_INFO = {
         "├ LLM: GPT-5.2, Claude 4.5 Sonnet\n"
         "├ Память: 30 msg\n"
         "├ Vision: ✅\n"
-        "├ Art: Premium (Qwen 2.0, GPT-4o Image)\n"
-        "├ Video: Kling 3.0 ✅\n"
+        "├ Art: Midjourney v7, Qwen VL, Ideogram 3\n"
+        "├ Video: Sora 2 Turbo, Veo 3, Kling 4 Pro ✅\n"
         "└ Цена: 590₽ / мес"
     ),
     "NEO": (

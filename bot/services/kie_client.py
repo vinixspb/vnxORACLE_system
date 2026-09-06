@@ -71,38 +71,42 @@ class KieClient:
         
         model_family = "default"
         model_lower = model.lower()
-        if "nano-banana" in model_lower: model_family = "nano_banana"
-        elif "qwen" in model_lower: model_family = "qwen_image"
+        if "flux" in model_lower: model_family = "flux"
+        elif "midjourney" in model_lower: model_family = "midjourney"
+        elif "qwen" in model_lower: model_family = "qwen_vl"
+        elif "dall-e" in model_lower or "dalle" in model_lower: model_family = "dalle"
+        elif "ideogram" in model_lower: model_family = "ideogram"
         elif "gpt-4o" in model_lower: model_family = "gpt_4o"
-        elif "flux" in model_lower: model_family = "flux"
-        elif "seedream" in model_lower: model_family = "seedream"
         elif "grok" in model_lower: model_family = "grok"
 
         config_matrix = {
             "vertical": {
-                "nano_banana": {"aspect_ratio": "9:16", "resolution": "1K", "output_format": "png"},
-                "qwen_image": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30},  
-                "gpt_4o": {},  
                 "flux": {"resolution": "1K", "aspect_ratio": "9:16"},
-                "seedream": {"resolution": "1K", "aspect_ratio": "9:16"},
+                "midjourney": {"aspect_ratio": "9:16", "quality": "high"},
+                "qwen_vl": {"image_size": "portrait_16_9", "output_format": "png", "num_inference_steps": 30},
+                "dalle": {"size": "1024x1792", "quality": "hd"},
+                "ideogram": {"aspect_ratio": "ASPECT_9_16", "style_type": "DESIGN"},
+                "gpt_4o": {},
                 "grok": {"aspect_ratio": "9:16"},
                 "default": {"aspect_ratio": "9:16", "resolution": "1K"}
             },
             "horizontal": {
-                "nano_banana": {"aspect_ratio": "16:9", "resolution": "1K", "output_format": "png"},
-                "qwen_image": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30},  
-                "gpt_4o": {},
                 "flux": {"resolution": "1K", "aspect_ratio": "16:9"},
-                "seedream": {"resolution": "1K", "aspect_ratio": "16:9"},
+                "midjourney": {"aspect_ratio": "16:9", "quality": "high"},
+                "qwen_vl": {"image_size": "landscape_16_9", "output_format": "png", "num_inference_steps": 30},
+                "dalle": {"size": "1792x1024", "quality": "hd"},
+                "ideogram": {"aspect_ratio": "ASPECT_16_9", "style_type": "DESIGN"},
+                "gpt_4o": {},
                 "grok": {"aspect_ratio": "16:9"},
                 "default": {"aspect_ratio": "16:9", "resolution": "1K"}
             },
             "square": {
-                "nano_banana": {"aspect_ratio": "1:1", "resolution": "1K", "output_format": "png"},
-                "qwen_image": {"image_size": "square", "output_format": "png", "num_inference_steps": 30},  
-                "gpt_4o": {},
                 "flux": {"resolution": "1K", "aspect_ratio": "1:1"},
-                "seedream": {"resolution": "1K", "aspect_ratio": "1:1"},
+                "midjourney": {"aspect_ratio": "1:1", "quality": "high"},
+                "qwen_vl": {"image_size": "square", "output_format": "png", "num_inference_steps": 30},
+                "dalle": {"size": "1024x1024", "quality": "hd"},
+                "ideogram": {"aspect_ratio": "ASPECT_1_1", "style_type": "DESIGN"},
+                "gpt_4o": {},
                 "grok": {"aspect_ratio": "1:1"},
                 "default": {"aspect_ratio": "1:1", "resolution": "1K"}
             }

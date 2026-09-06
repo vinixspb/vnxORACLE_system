@@ -14,8 +14,11 @@ export const translations = {
     adaptiveSystems: 'B2B Solutions',
     subtitle: 'The Future of Corporate Hiring 2026',
     heading: ['Hire Intelligence.', 'Rent Results.'],
+    btnCreateBot: 'Build my employee',
     btnFeatures: 'Who We Offer?',
     btnHowItWorks: 'How Rental Works',
+    navDemo: 'Book a demo',
+    navCreateBot: 'Build your agent',
     tag1: 'LLM Models',
     tag2: 'Deep Integration',
     tag3: '24/7 Automation',
@@ -30,7 +33,7 @@ export const translations = {
     role3Title: 'Internal Assistant (HR/Office)',
     role3Desc: 'Helps your live employees find regulations and onboard newcomers.',
 
-    howHeading: 'Employee as a Service (EaaS)',
+    howHeading: 'AI as a Service (AIaaS)',
     howStep1Title: 'Interview',
     howStep1Desc:
       'You tell us what tasks the digital employee should handle and which databases to access.',
@@ -78,6 +81,63 @@ export const translations = {
       ]
     },
 
+    problems: {
+      heading: 'The Illusion of Smart Chatbots',
+      subheading: 'Standard no-code bots offer only flat shadows of real intelligence—scripts that break the moment a user steps off the pre-defined path.',
+      items: [
+        {
+          title: 'No-code limitations',
+          desc: 'Button-driven bots force customers to guess the right answer. One step sideways—and the bot surrenders, transferring the dialogue to a human operator.'
+        },
+        {
+          title: 'Broken context',
+          desc: 'User closed the browser tab? The dialogue is lost forever. No memory, no follow-up.'
+        },
+        {
+          title: 'Manual updates',
+          desc: 'Changed your prices? You have to manually rewrite logic blocks in a visual editor.'
+        }
+      ]
+    },
+
+    solution: {
+      heading: 'Engineering Approach to AI',
+      subheading: 'The core of ai-worker-template, translated into business value.',
+      items: [
+        {
+          title: 'Omnichannel Memory',
+          desc: 'Unified session. Customer started the dialogue on the website, clicked a button, and continued in Telegram from the same word. No lost leads.'
+        },
+        {
+          title: 'Auto-sync (ETL parsing)',
+          desc: 'The bot reads your website itself. New promotion on the 1st? Knowledge base updates automatically, without manual intervention.'
+        },
+        {
+          title: 'Reframing Matrix & Guardrails',
+          desc: 'Our AI doesn\'t just provide information—it sells. If the resort has no pool, the bot won\'t say a dry "no", but will shift focus to unique climate therapy and pine forests.'
+        }
+      ]
+    },
+
+    underTheHood: {
+      heading: 'Under the Hood',
+      subheading: 'For those who value reliability',
+      items: [
+        {
+          title: 'API-First Core',
+          desc: 'Independent microservice that easily scales to any platform (Web, Telegram, Voice).'
+        },
+        {
+          title: 'Isolated Databases',
+          desc: 'Your data and client sessions are stored in a secure perimeter.'
+        },
+        {
+          title: 'Custom Dictionaries',
+          desc: 'Individual configuration of constraints (what AI absolutely cannot say) and focus points.'
+        }
+      ]
+    },
+
     onboarding: {
       heading: 'Configuration Checklist',
       subheading: 'Set up your digital employee. The assistant fills this in for you as you talk.',
@@ -120,7 +180,7 @@ export const translations = {
           id: 'employee',
           title: 'Digital employee',
           fields: [
-            { id: 'agentName', label: 'Employee name', type: 'text', placeholder: 'Aylin' },
+            { id: 'agentName', label: 'Employee name', type: 'text', placeholder: 'Trinity' },
             {
               id: 'agentRoleField',
               label: 'Role',
@@ -182,8 +242,11 @@ export const translations = {
     adaptiveSystems: 'B2B Решения',
     subtitle: 'Будущее корпоративного найма 2026',
     heading: ['Нанимайте Интеллект.', 'Арендуйте Результат.'],
+    btnCreateBot: 'Создать моего сотрудника',
     btnFeatures: 'Кого мы предлагаем?',
     btnHowItWorks: 'Как работает аренда',
+    navDemo: 'Демо',
+    navCreateBot: 'Создать бота',
     tag1: 'LLM-Модели',
     tag2: 'Глубокая Интеграция',
     tag3: 'Автоматизация 24/7',
@@ -198,7 +261,7 @@ export const translations = {
     role3Title: 'Внутренний Ассистент (HR/Офис)',
     role3Desc: 'Помогает вашим живым сотрудникам находить регламенты и онбордить новичков.',
 
-    howHeading: 'Сотрудник как Услуга (EaaS)',
+    howHeading: 'Сотрудник как Услуга (AIaaS)',
     howStep1Title: 'Собеседование',
     howStep1Desc:
       'Вы рассказываете, какие задачи должен закрывать цифровой сотрудник и к каким базам данных иметь доступ.',
@@ -247,6 +310,63 @@ export const translations = {
       ]
     },
 
+    problems: {
+      heading: 'Иллюзия умных чат-ботов',
+      subheading: 'Стандартные no-code боты предлагают лишь плоские тени реального интеллекта — скрипты, которые ломаются при шаге в сторону.',
+      items: [
+        {
+          title: 'Ограниченность no-code',
+          desc: 'Кнопочные боты заставляют клиента угадывать правильный ответ. Шаг вправо — и бот сдается, переводя диалог на оператора.'
+        },
+        {
+          title: 'Разорванный контекст',
+          desc: 'Пользователь закрыл вкладку на сайте — диалог потерян навсегда. Никакой памяти, никакого продолжения.'
+        },
+        {
+          title: 'Рутина обновлений',
+          desc: 'Поменялись цены? Вам придется вручную переписывать логические блоки в визуальном редакторе.'
+        }
+      ]
+    },
+
+    solution: {
+      heading: 'Инженерный подход к ИИ',
+      subheading: 'Начинка ai-worker-template, переведённая на язык пользы для бизнеса.',
+      items: [
+        {
+          title: 'Сквозная память (Omnichannel)',
+          desc: 'Единая сессия. Клиент начал диалог на сайте, нажал кнопку и продолжил общение в Telegram с того же слова. Никаких потерь лидов.'
+        },
+        {
+          title: 'Автоматическая синхронизация (ETL-парсинг)',
+          desc: 'Бот сам читает ваш сайт. Появилась новая акция первого числа? База знаний обновится автоматически, без ручного вмешательства.'
+        },
+        {
+          title: 'Матрица рефрейминга и Guardrails',
+          desc: 'Наш ИИ не просто выдает справку — он продает. Если в санатории нет бассейна, бот не скажет сухое «нет», а переведет фокус на уникальную климатотерапию и хвойные леса.'
+        }
+      ]
+    },
+
+    underTheHood: {
+      heading: 'Под капотом',
+      subheading: 'Для тех, кто ценит надёжность',
+      items: [
+        {
+          title: 'API-First ядро',
+          desc: 'Независимый микросервис, который легко масштабируется на любые платформы (Web, Telegram, Voice).'
+        },
+        {
+          title: 'Изолированные базы данных',
+          desc: 'Ваши данные и сессии клиентов хранятся в защищённом контуре.'
+        },
+        {
+          title: 'Кастомные справочники',
+          desc: 'Индивидуальная настройка ограничений (о чем ИИ категорически нельзя говорить) и точек фокуса.'
+        }
+      ]
+    },
+
     onboarding: {
       heading: 'Чек-лист конфигурации',
       subheading: 'Настройте цифрового сотрудника. Ассистент заполняет форму за вас в ходе беседы.',
@@ -289,7 +409,7 @@ export const translations = {
           id: 'employee',
           title: 'Цифровой сотрудник',
           fields: [
-            { id: 'agentName', label: 'Имя сотрудника', type: 'text', placeholder: 'Айлин' },
+            { id: 'agentName', label: 'Имя сотрудника', type: 'text', placeholder: 'Тринити' },
             {
               id: 'agentRoleField',
               label: 'Роль',

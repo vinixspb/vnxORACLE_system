@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronUp, ChevronDown, Sparkles } from 'lucide-react'
+import { ChevronUp, ChevronDown, Sparkles, Eye } from 'lucide-react'
+import CollectedDataPanel from './CollectedDataPanel'
 
 // Поля, которые чат умеет заполнять сам.
 export const CONFIG_FIELDS = [
@@ -67,6 +68,7 @@ export default function OnboardingSection({ t, config, setConfig, prefilled, onT
   const [sourceOpen, setSourceOpen] = useState(true)
   const [savedAt, setSavedAt] = useState(false)
   const [activated, setActivated] = useState(false)
+  const [collectedOpen, setCollectedOpen] = useState(false)
 
   const update = (key, value) => {
     setConfig((prev) => ({ ...prev, [key]: value }))
@@ -96,6 +98,9 @@ export default function OnboardingSection({ t, config, setConfig, prefilled, onT
           </div>
 
           <div className="agent-actions">
+            <button className="btn-icon" type="button" onClick={() => setCollectedOpen(true)} title="View collected data">
+              <Eye size={20} />
+            </button>
             <button className="btn-soft" type="button" onClick={() => setSavedAt(true)}>
               {o.save}
             </button>
@@ -233,6 +238,14 @@ export default function OnboardingSection({ t, config, setConfig, prefilled, onT
           )
         })}
       </div>
+
+      <CollectedDataPanel
+        isOpen={collectedOpen}
+        onClose={() => setCollectedOpen(false)}
+        config={config}
+        prefilled={prefilled}
+        t={t}
+      />
     </section>
   )
 }

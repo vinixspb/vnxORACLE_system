@@ -8,11 +8,12 @@ def get_image_models_keyboard(user_id: int, current_model: str) -> InlineKeyboar
     """
     
     start_models = {
-        "⚡️ Flux Pro (Логотипы)": config.IMG_FLUX_SCHNELL,
-        "🍌 Nano Banana (Яркий Арт)": config.IMG_NANO_BANANA,
-        "🖌 Qwen 2.0 (Текст и Постеры)": config.IMG_QWEN_2,
-        "🌌 Seedream (Фэнтези)": config.IMG_SEEDREAM,
-        "🆓 Pollinations (Быстрый старт)": config.IMG_POLLINATIONS
+        "🔥 Flux 2 Ultra (Топ 2026)": config.IMG_FLUX_PRO,
+        "🎨 Midjourney v7 (Фотореализм)": config.IMG_MIDJOURNEY_7,
+        "🖌 Qwen VL (Текст на артах)": config.IMG_QWEN_VL,
+        "🌟 DALL-E 4 (Креатив)": config.IMG_DALLE_4,
+        "⚡️ Ideogram 3 (Типографика)": config.IMG_IDEOGRAM_3,
+        "🆓 Pollinations (Бесплатно)": config.IMG_POLLINATIONS
     }
 
     keyboard = []
