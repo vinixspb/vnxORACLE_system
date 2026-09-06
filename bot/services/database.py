@@ -1,9 +1,15 @@
+import os
 import sqlite3
 import logging
 
 logger = logging.getLogger(__name__)
 
-DB_NAME = "oracle.db"
+# Абсолютный путь, иначе база создаётся заново в текущей рабочей директории
+# и бот теряет всю историю. ORACLE_DB_PATH позволяет держать базу вне
+# git-клона и делить её с web_api.
+DB_NAME = os.getenv("ORACLE_DB_PATH") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "oracle.db"
+)
 
 class Database:
     def __init__(self):
@@ -27,7 +33,7 @@ class Database:
             # NORMAL снижает нагрузку на диск без потери надежности
             self.conn.execute("PRAGMA synchronous=NORMAL;")
             
-            logger.info("✅ Database Connected: WAL Mode Active.")
+            logger.info(f"✅ Database Connected: WAL Mode Active. Path: {DB_NAME}")
         except Exception as e:
             logger.error(f"❌ DB Connect Error: {e}")
 
