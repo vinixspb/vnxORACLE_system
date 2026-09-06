@@ -134,8 +134,8 @@ async def chat(request: ChatRequest, http_request: Request):
         # Получаем полную историю для LLM
         messages = conversation_manager.get_messages(session_id)
 
-        # Если это первое сообщение, добавляем system prompt
-        if len(messages) == 1:
+        # Добавляем system prompt, если его ещё нет (должен быть первым сообщением)
+        if not messages or messages[0].get("role") != "system":
             messages.insert(0, {
                 "role": "system",
                 "content": config.SALES_CONSULTANT_PROMPT
