@@ -231,23 +231,20 @@ export class LiquidGlassFAB {
 
     onLeave() {
         this.isHovering = false
-        this.pendingUpdate = false
+        this.pendingUpdate = false  // Сбрасываем флаг ПЕРЕД установкой targets
 
-        // Smooth return to center with gentle oscillation
-        // Using requestAnimationFrame to ensure smooth reset even if pointer leaves abruptly
-        requestAnimationFrame(() => {
-            this.specularX.set(50)
-            this.specularY.set(30)
-            this.causticX.set(50)
-            this.causticY.set(70)
-            this.parallaxX.set(0)
-            this.parallaxY.set(0)
-            this.lensX.set(50)
-            this.lensY.set(50)
-            this.scale.set(1.0)
-            this.squashX.set(1.0)
-            this.squashY.set(1.0)
-        })
+        // Принудительно сбрасываем все springs в дефолт
+        this.specularX.set(50)
+        this.specularY.set(30)
+        this.causticX.set(50)
+        this.causticY.set(70)
+        this.parallaxX.set(0)
+        this.parallaxY.set(0)
+        this.lensX.set(50)
+        this.lensY.set(50)
+        this.scale.set(1.0)
+        this.squashX.set(1.0)
+        this.squashY.set(1.0)
     }
 
     onMove(e) {
