@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { Zap, Shield, Settings } from 'lucide-react'
+import { useTiltEffect } from '../hooks/useTiltEffect'
 
 const EASE = [0.16, 1, 0.3, 1]
 
@@ -7,6 +8,31 @@ const icons = {
   0: Zap,
   1: Shield,
   2: Settings
+}
+
+function HoodCard({ item, idx }) {
+  const Icon = icons[idx]
+  const { ref, onMouseEnter, onMouseMove, onMouseLeave } = useTiltEffect(10)
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseEnter={onMouseEnter}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      className="hood-card"
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.5, delay: idx * 0.1, ease: EASE }}
+    >
+      <div className="hood-icon">
+        <Icon size={30} strokeWidth={1.8} />
+      </div>
+      <h3 className="hood-title">{item.title}</h3>
+      <p className="hood-desc">{item.desc}</p>
+    </motion.div>
+  )
 }
 
 export default function UnderTheHoodSection({ t }) {
@@ -35,25 +61,9 @@ export default function UnderTheHoodSection({ t }) {
         </div>
 
         <div className="under-hood-grid">
-          {t.underTheHood.items.map((item, idx) => {
-            const Icon = icons[idx]
-            return (
-              <motion.div
-                key={idx}
-                className="hood-card"
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ duration: 0.5, delay: idx * 0.1, ease: EASE }}
-              >
-                <div className="hood-icon">
-                  <Icon size={30} strokeWidth={1.8} />
-                </div>
-                <h3 className="hood-title">{item.title}</h3>
-                <p className="hood-desc">{item.desc}</p>
-              </motion.div>
-            )
-          })}
+          {t.underTheHood.items.map((item, idx) => (
+            <HoodCard key={idx} item={item} idx={idx} />
+          ))}
         </div>
       </div>
     </section>

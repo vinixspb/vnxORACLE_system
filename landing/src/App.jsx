@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
 import { Plus, Moon, Sun } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useRef, useEffect } from 'react'
 import { translations } from './i18n'
 import DirectionsSection from './components/DirectionsSection'
 import ProblemsSection from './components/ProblemsSection'
@@ -10,6 +10,7 @@ import OnboardingSection, { emptyConfig } from './components/OnboardingSection'
 import { deriveConfigFromMessages } from './configFromChat'
 import './App.css'
 import ChatWidget from './components/ChatWidget'
+import { useTiltEffect } from './hooks/useTiltEffect'
 
 const EASE = [0.16, 1, 0.3, 1]
 
@@ -182,6 +183,16 @@ function FooterContent({ lang, scrollToSection, onCreateBot }) {
   )
 }
 
+function RoleCard({ title, desc }) {
+  const { ref, onMouseEnter, onMouseMove, onMouseLeave } = useTiltEffect(10)
+  return (
+    <div ref={ref} onMouseEnter={onMouseEnter} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} className="role-card">
+      <h3 className="role-title">{title}</h3>
+      <p className="role-desc">{desc}</p>
+    </div>
+  )
+}
+
 function RolesSection({ lang }) {
   const t = translations[lang]
 
@@ -192,21 +203,23 @@ function RolesSection({ lang }) {
         <p className="section-description">{t.rolesDescription}</p>
 
         <div className="roles-grid">
-          <div className="role-card">
-            <h3 className="role-title">{t.role1Title}</h3>
-            <p className="role-desc">{t.role1Desc}</p>
-          </div>
-          <div className="role-card">
-            <h3 className="role-title">{t.role2Title}</h3>
-            <p className="role-desc">{t.role2Desc}</p>
-          </div>
-          <div className="role-card">
-            <h3 className="role-title">{t.role3Title}</h3>
-            <p className="role-desc">{t.role3Desc}</p>
-          </div>
+          <RoleCard title={t.role1Title} desc={t.role1Desc} />
+          <RoleCard title={t.role2Title} desc={t.role2Desc} />
+          <RoleCard title={t.role3Title} desc={t.role3Desc} />
         </div>
       </div>
     </section>
+  )
+}
+
+function StepCard({ number, title, desc }) {
+  const { ref, onMouseEnter, onMouseMove, onMouseLeave } = useTiltEffect(10)
+  return (
+    <div ref={ref} onMouseEnter={onMouseEnter} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} className="step-card">
+      <div className="step-number">{number}</div>
+      <h3 className="step-title">{title}</h3>
+      <p className="step-desc">{desc}</p>
+    </div>
   )
 }
 
@@ -219,24 +232,22 @@ function HowItWorksSection({ lang }) {
         <h2 className="section-heading">{t.howHeading}</h2>
 
         <div className="steps-grid">
-          <div className="step-card">
-            <div className="step-number">01</div>
-            <h3 className="step-title">{t.howStep1Title}</h3>
-            <p className="step-desc">{t.howStep1Desc}</p>
-          </div>
-          <div className="step-card">
-            <div className="step-number">02</div>
-            <h3 className="step-title">{t.howStep2Title}</h3>
-            <p className="step-desc">{t.howStep2Desc}</p>
-          </div>
-          <div className="step-card">
-            <div className="step-number">03</div>
-            <h3 className="step-title">{t.howStep3Title}</h3>
-            <p className="step-desc">{t.howStep3Desc}</p>
-          </div>
+          <StepCard number="01" title={t.howStep1Title} desc={t.howStep1Desc} />
+          <StepCard number="02" title={t.howStep2Title} desc={t.howStep2Desc} />
+          <StepCard number="03" title={t.howStep3Title} desc={t.howStep3Desc} />
         </div>
       </div>
     </section>
+  )
+}
+
+function TrustCard({ title, desc }) {
+  const { ref, onMouseEnter, onMouseMove, onMouseLeave } = useTiltEffect(10)
+  return (
+    <div ref={ref} onMouseEnter={onMouseEnter} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} className="trust-card">
+      <h3 className="trust-title">{title}</h3>
+      <p className="trust-desc">{desc}</p>
+    </div>
   )
 }
 
@@ -249,18 +260,9 @@ function TrustSection({ lang }) {
         <h2 className="section-heading">{t.trustHeading}</h2>
 
         <div className="trust-grid">
-          <div className="trust-card">
-            <h3 className="trust-title">{t.trustPoint1Title}</h3>
-            <p className="trust-desc">{t.trustPoint1Desc}</p>
-          </div>
-          <div className="trust-card">
-            <h3 className="trust-title">{t.trustPoint2Title}</h3>
-            <p className="trust-desc">{t.trustPoint2Desc}</p>
-          </div>
-          <div className="trust-card">
-            <h3 className="trust-title">{t.trustPoint3Title}</h3>
-            <p className="trust-desc">{t.trustPoint3Desc}</p>
-          </div>
+          <TrustCard title={t.trustPoint1Title} desc={t.trustPoint1Desc} />
+          <TrustCard title={t.trustPoint2Title} desc={t.trustPoint2Desc} />
+          <TrustCard title={t.trustPoint3Title} desc={t.trustPoint3Desc} />
         </div>
       </div>
     </section>

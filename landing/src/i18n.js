@@ -33,7 +33,7 @@ export const translations = {
     role3Title: 'Internal Assistant (HR/Office)',
     role3Desc: 'Helps your live employees find regulations and onboard newcomers.',
 
-    howHeading: 'AI as a Service (AIaaS)',
+    howHeading: 'Intelligence as a Service',
     howStep1Title: 'Interview',
     howStep1Desc:
       'You tell us what tasks the digital employee should handle and which databases to access.',
@@ -261,7 +261,7 @@ export const translations = {
     role3Title: 'Внутренний Ассистент (HR/Офис)',
     role3Desc: 'Помогает вашим живым сотрудникам находить регламенты и онбордить новичков.',
 
-    howHeading: 'Сотрудник как Услуга (AIaaS)',
+    howHeading: 'Интеллект как услуга (AIaaS)',
     howStep1Title: 'Собеседование',
     howStep1Desc:
       'Вы рассказываете, какие задачи должен закрывать цифровой сотрудник и к каким базам данных иметь доступ.',

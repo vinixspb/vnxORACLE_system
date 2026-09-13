@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { Link, Database, Sparkles } from 'lucide-react'
+import { useTiltEffect } from '../hooks/useTiltEffect'
 
 const EASE = [0.16, 1, 0.3, 1]
 
@@ -7,6 +8,31 @@ const icons = {
   0: Link,
   1: Database,
   2: Sparkles
+}
+
+function SolutionCard({ item, idx }) {
+  const Icon = icons[idx]
+  const { ref, onMouseEnter, onMouseMove, onMouseLeave } = useTiltEffect(10)
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseEnter={onMouseEnter}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      className="solution-card"
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.5, delay: idx * 0.1, ease: EASE }}
+    >
+      <div className="solution-icon">
+        <Icon size={32} strokeWidth={1.8} />
+      </div>
+      <h3 className="solution-title">{item.title}</h3>
+      <p className="solution-desc">{item.desc}</p>
+    </motion.div>
+  )
 }
 
 export default function SolutionSection({ t }) {
@@ -35,25 +61,9 @@ export default function SolutionSection({ t }) {
         </div>
 
         <div className="solution-grid">
-          {t.solution.items.map((item, idx) => {
-            const Icon = icons[idx]
-            return (
-              <motion.div
-                key={idx}
-                className="solution-card"
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ duration: 0.5, delay: idx * 0.1, ease: EASE }}
-              >
-                <div className="solution-icon">
-                  <Icon size={32} strokeWidth={1.8} />
-                </div>
-                <h3 className="solution-title">{item.title}</h3>
-                <p className="solution-desc">{item.desc}</p>
-              </motion.div>
-            )
-          })}
+          {t.solution.items.map((item, idx) => (
+            <SolutionCard key={idx} item={item} idx={idx} />
+          ))}
         </div>
       </div>
     </section>

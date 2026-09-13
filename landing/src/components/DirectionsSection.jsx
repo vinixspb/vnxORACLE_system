@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { MessagesSquare, BrainCircuit, Globe, ArrowRight, Check } from 'lucide-react'
+import { useTiltEffect } from '../hooks/useTiltEffect'
 
 const EASE = [0.16, 1, 0.3, 1]
 
@@ -7,6 +8,50 @@ const ICONS = {
   messages: MessagesSquare,
   brain: BrainCircuit,
   globe: Globe
+}
+
+function DirectionCard({ item, index, d, onSelect }) {
+  const Icon = ICONS[item.icon] ?? MessagesSquare
+  const { ref, onMouseEnter, onMouseMove, onMouseLeave } = useTiltEffect(12)
+
+  return (
+    <motion.article
+      ref={ref}
+      onMouseEnter={onMouseEnter}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      className="direction-card"
+      initial={{ y: 24, opacity: 0 }}
+      whileInView={{ y: 0, opacity: 1 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 0.7, delay: index * 0.12, ease: EASE }}
+    >
+      <span className="direction-icon">
+        <Icon size={30} strokeWidth={1.5} />
+      </span>
+
+      <h3 className="direction-title">{item.title}</h3>
+      <p className="direction-desc">{item.desc}</p>
+
+      <ul className="direction-bullets">
+        {item.bullets.map((bullet) => (
+          <li key={bullet} className="direction-bullet">
+            <Check size={14} strokeWidth={2.5} />
+            <span>{bullet}</span>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        className="direction-link"
+        type="button"
+        onClick={() => onSelect(item)}
+      >
+        {d.learnMore}
+        <ArrowRight size={15} strokeWidth={2} />
+      </button>
+    </motion.article>
+  )
 }
 
 export default function DirectionsSection({ t, onSelect }) {
@@ -21,45 +66,15 @@ export default function DirectionsSection({ t, onSelect }) {
         </div>
 
         <div className="directions-grid">
-          {d.items.map((item, index) => {
-            const Icon = ICONS[item.icon] ?? MessagesSquare
-
-            return (
-              <motion.article
-                key={item.id}
-                className="direction-card"
-                initial={{ y: 24, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={{ duration: 0.7, delay: index * 0.12, ease: EASE }}
-              >
-                <span className="direction-icon">
-                  <Icon size={30} strokeWidth={1.5} />
-                </span>
-
-                <h3 className="direction-title">{item.title}</h3>
-                <p className="direction-desc">{item.desc}</p>
-
-                <ul className="direction-bullets">
-                  {item.bullets.map((bullet) => (
-                    <li key={bullet} className="direction-bullet">
-                      <Check size={14} strokeWidth={2.5} />
-                      <span>{bullet}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <button
-                  className="direction-link"
-                  type="button"
-                  onClick={() => onSelect(item)}
-                >
-                  {d.learnMore}
-                  <ArrowRight size={15} strokeWidth={2} />
-                </button>
-              </motion.article>
-            )
-          })}
+          {d.items.map((item, index) => (
+            <DirectionCard
+              key={item.id}
+              item={item}
+              index={index}
+              d={d}
+              onSelect={onSelect}
+            />
+          ))}
         </div>
       </div>
     </section>

@@ -14,6 +14,13 @@ class SpringValue {
         this.target = target
     }
 
+    snap(value) {
+        // Instantly snap to value, stopping all motion
+        this.current = value
+        this.target = value
+        this.velocity = 0
+    }
+
     update() {
         const delta = this.target - this.current
         const springForce = delta * this.stiffness
@@ -231,20 +238,20 @@ export class LiquidGlassFAB {
 
     onLeave() {
         this.isHovering = false
-        this.pendingUpdate = false  // Сбрасываем флаг ПЕРЕД установкой targets
+        this.pendingUpdate = false
 
-        // Принудительно сбрасываем все springs в дефолт
-        this.specularX.set(50)
-        this.specularY.set(30)
-        this.causticX.set(50)
-        this.causticY.set(70)
-        this.parallaxX.set(0)
-        this.parallaxY.set(0)
-        this.lensX.set(50)
-        this.lensY.set(50)
-        this.scale.set(1.0)
-        this.squashX.set(1.0)
-        this.squashY.set(1.0)
+        // Instantly snap all springs to default values, killing velocity
+        this.specularX.snap(50)
+        this.specularY.snap(30)
+        this.causticX.snap(50)
+        this.causticY.snap(70)
+        this.parallaxX.snap(0)
+        this.parallaxY.snap(0)
+        this.lensX.snap(50)
+        this.lensY.snap(50)
+        this.scale.snap(1.0)
+        this.squashX.snap(1.0)
+        this.squashY.snap(1.0)
     }
 
     onMove(e) {
@@ -262,7 +269,9 @@ export class LiquidGlassFAB {
     }
 
     updatePointerEffects() {
-        if (!this.isHovering || !this.pendingUpdate) return
+        // CRITICAL: Check isHovering first to prevent updates after onLeave
+        if (!this.isHovering) return
+        if (!this.pendingUpdate) return
 
         const rect = this.fab.getBoundingClientRect()
         const centerX = rect.width / 2
