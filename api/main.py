@@ -9,6 +9,7 @@ import config_media
 from services import ai_service, sheets_service, conversation_manager, rate_limiter
 from services.kie_client import kie_client
 from services.formatting import md_to_html
+import re
 
 # Настройка логирования
 logging.basicConfig(
@@ -16,6 +17,21 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def strip_html_to_markdown(text: str) -> str:
+    """
+    Принудительно заменяет HTML-теги на Markdown, если модель их сгенерировала.
+    <b>текст</b> → **текст**
+    <i>текст</i> → *текст*
+    <br> → \n
+    """
+    text = re.sub(r'<b>(.*?)</b>', r'**\1**', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<strong>(.*?)</strong>', r'**\1**', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<i>(.*?)</i>', r'*\1*', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<em>(.*?)</em>', r'*\1*', text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<p>(.*?)</p>', r'\1\n\n', text, flags=re.IGNORECASE | re.DOTALL)
+    return text
 
 # Создаём FastAPI приложение
 app = FastAPI(
@@ -147,6 +163,9 @@ async def chat(request: ChatRequest, http_request: Request):
             messages=messages,
             tier="START"  # Для web-чата используем START тариф
         )
+
+        # Очищаем HTML-теги, если модель их сгенерировала (несмотря на инструкции)
+        response_text = strip_html_to_markdown(response_text)
 
         # Конвертируем Markdown → HTML для правильного отображения в виджете
         response_html = md_to_html(response_text)
