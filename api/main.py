@@ -167,8 +167,8 @@ async def chat(request: ChatRequest, http_request: Request):
         # Очищаем HTML-теги, если модель их сгенерировала (несмотря на инструкции)
         response_text = strip_html_to_markdown(response_text)
 
-        # Конвертируем Markdown → HTML для правильного отображения в виджете
-        response_html = md_to_html(response_text)
+        # Отправляем чистый Markdown клиенту (ChatWidget рендерит его через marked.js)
+        # md_to_html() используется только для Telegram бота, веб-чат работает с Markdown
 
         # Добавляем ответ AI в историю (сохраняем оригинальный Markdown)
         conversation_manager.add_message(
@@ -186,7 +186,7 @@ async def chat(request: ChatRequest, http_request: Request):
         )
 
         return ChatResponse(
-            response=response_html,  # Отправляем HTML-версию клиенту
+            response=response_text,  # Отправляем Markdown клиенту
             session_id=session_id,
             needs_contact=needs_contact
         )
