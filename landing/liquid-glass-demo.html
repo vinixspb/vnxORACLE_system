@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquid Glass FAB — vnxORACLE UI Module Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f1318 0%, #1a1f2e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        /* Geometric grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(0deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .demo-container {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .demo-header {
+            margin-bottom: 60px;
+        }
+
+        .demo-title {
+            font-size: 48px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #64b5f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+
+        .demo-subtitle {
+            font-size: 18px;
+            color: rgba(255,255,255,0.6);
+            font-weight: 400;
+        }
+
+        .demo-stage {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 0 auto 40px;
+            background: rgba(255,255,255,0.02);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .demo-instructions {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 24px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            text-align: left;
+        }
+
+        .demo-instructions h3 {
+            color: #fff;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        .demo-instructions ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .demo-instructions li {
+            color: rgba(255,255,255,0.7);
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .demo-instructions li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #64b5f6;
+        }
+
+        .version-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background: rgba(100, 181, 246, 0.1);
+            border: 1px solid rgba(100, 181, 246, 0.3);
+            border-radius: 20px;
+            color: #64b5f6;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .fab-container-demo {
+            position: relative;
+            width: 100px;
+            height: 100px;
+        }
+    </style>
+    <link rel="stylesheet" href="./src/components/ChatWidget/liquid-glass-fab.css">
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-header">
+            <div class="version-badge">vnxORACLE UI Module v1.0</div>
+            <h1 class="demo-title">Liquid Glass FAB</h1>
+            <p class="demo-subtitle">Apple Vision Pro Inspired • Spring Physics • 8-Corner Morphing</p>
+        </div>
+
+        <div class="demo-stage">
+            <div class="fab-container-demo"></div>
+        </div>
+
+        <div class="demo-instructions">
+            <h3>Interactive Features</h3>
+            <ul>
+                <li><strong>Hover:</strong> Watch the liquid deform and follow your cursor</li>
+                <li><strong>Move:</strong> 8-corner morphing creates organic water-drop effect</li>
+                <li><strong>Click:</strong> Ripple animation + squash/stretch physics</li>
+                <li><strong>Icon:</strong> Parallax movement for depth perception</li>
+                <li><strong>Entrance:</strong> Water drop falling animation on load</li>
+            </ul>
+        </div>
+    </div>
+
+    <script type="module">
+        import { LiquidGlassFAB } from './src/components/ChatWidget/liquid-glass-fab.js'
+
+        const container = document.querySelector('.fab-container-demo')
+
+        const fab = new LiquidGlassFAB(container, () => {
+            console.log('FAB clicked!')
+            alert('This is where your chat window would open.\n\nIn production, this callback triggers:\n• Chat window toggle\n• State management\n• Analytics tracking')
+        })
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            fab.destroy()
+        })
+    </script>
+</body>
+</html>
