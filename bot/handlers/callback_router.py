@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import config
@@ -66,6 +67,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🎬 Выбор действия после загрузки фото
     elif data == "video_image_random":
+        # Убираем старые кнопки, чтобы нельзя было запустить две задачи одним меню.
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
         # Случайная генерация - выбираем случайный промпт
         import random
         random_prompts = [
@@ -92,6 +98,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(schedule_auto_video_format(update, context, prompt, msg.message_id))
 
     elif data == "video_image_custom":
+        # Убираем старые кнопки, чтобы меню не оставалось активным после выбора.
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
         # Генерация по заданию пользователя
         context.user_data['mode'] = 'video_image_custom_prompt_wait'
         await query.message.reply_text(
@@ -115,14 +126,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🎬 Выбор формата видео
     elif data == "video_format_16_9":
+        await query.answer("🎬 Запускаю генерацию…")
         context.user_data['video_aspect_ratio'] = "16:9"
         context.user_data['mode'] = None  # Предотвращаем дубли от таймера
-        await start_video_generation_with_format(update, context, "16:9")
+        return await start_video_generation_with_format(update, context, "16:9")
 
     elif data == "video_format_9_16":
+        await query.answer("🎬 Запускаю генерацию…")
         context.user_data['video_aspect_ratio'] = "9:16"
         context.user_data['mode'] = None  # Предотвращаем дубли от таймера
-        await start_video_generation_with_format(update, context, "9:16")
+        return await start_video_generation_with_format(update, context, "9:16")
 
     elif data == "video_format_back":
         # Возврат к выбору действия, сохраняя фото и промпт
