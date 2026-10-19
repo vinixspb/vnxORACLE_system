@@ -4,6 +4,7 @@
 """
 
 import logging
+import os
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
@@ -354,22 +355,39 @@ async def handle_video_image_with_prompt_and_format(update: Update, context: Con
     Генерация image-to-video с промптом и форматом (НОВЫЙ UX)
     """
     user_id = update.effective_user.id
+
+    # Этот обработчик вызывается и сообщением, и inline-кнопкой.
+    # Не используем update.message: у CallbackQuery оно равно None.
     context.user_data['mode'] = None
 
-    # Проверка цензуры
+    if not image_path or not os.path.isfile(image_path):
+        context.user_data['mode'] = 'video_image_wait'
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Исходная фотография не найдена. Отправьте её ещё раз.",
+            parse_mode='HTML'
+        )
+        return
+
+    # Проверка цензуры: при отказе возвращаем пользователя к вводу промпта.
     if prompt != "/skip" and not is_prompt_safe(prompt):
-        await update.message.reply_text(
-            "🔞 <b>Запрос отклонен цензурой.</b>\nПожалуйста, измените описание.",
+        context.user_data['mode'] = 'video_image_custom_prompt_wait'
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🔞 <b>Запрос отклонен цензурой.</b>\nОпишите движение иначе или напишите «Отмена».",
             parse_mode='HTML'
         )
         return
 
     safe_prompt = clean_prompt(prompt) if prompt != "/skip" else "natural motion"
 
-    # Получаем модель
+    # Получаем модель и страхуемся от некорректного ключа.
     tariff = sheets_mgr.get_user_tariff(user_id)
-    model_key = context.user_data.get('video_model', "seedance-2.0")
+    model_key = context.user_data.get('video_model') or "seedance-2.0"
     model_info = get_model_info(model_key)
+    if not model_info:
+        model_key = "seedance-2.0"
+        model_info = get_model_info(model_key)
     model_name = model_info['name']
 
     await context.bot.send_chat_action(chat_id=user_id, action=ChatAction.RECORD_VIDEO)
@@ -385,7 +403,11 @@ async def handle_video_image_with_prompt_and_format(update: Update, context: Con
         f"💰 Примерная стоимость: <b>${estimated_cost:.3f}</b>\n\n"
     )
 
-    msg = await update.message.reply_text(f"{prefix}{get_wait_message('video')}", parse_mode='HTML')
+    msg = await context.bot.send_message(
+        chat_id=user_id,
+        text=f"{prefix}{get_wait_message('video')}",
+        parse_mode='HTML'
+    )
 
     loader = DynamicWaitMessage(msg, "video", prefix)
     loader.start()
