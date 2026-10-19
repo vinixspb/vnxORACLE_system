@@ -333,6 +333,43 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_video_text_request(update, context, text)
         return
 
+    # 🎬 РЕЖИМ ГЕНЕРАЦИИ ВИДЕО ПО КАРТИНКЕ (промпт движения)
+    if mode == 'video_image_prompt_wait':
+        from handlers.video import handle_video_image_with_prompt
+        await handle_video_image_with_prompt(update, context, text)
+        return
+
+    # 🎬 РЕЖИМ ОЖИДАНИЯ ПОЛЬЗОВАТЕЛЬСКОГО ПРОМПТА (после "✍️ По моему заданию")
+    if mode == 'video_image_custom_prompt_wait':
+        # Проверка команды отмены
+        if text.lower() in ['отмена', 'cancel', 'стоп', 'выход']:
+            context.user_data['mode'] = 'video_image_action_choice'
+            from keyboards.ai_video import get_video_image_action_keyboard
+            await update.message.reply_text(
+                "✅ Отменено. Выберите действие снова:",
+                reply_markup=get_video_image_action_keyboard(),
+                parse_mode='HTML'
+            )
+            return
+
+        # Сохраняем промпт и переходим к выбору формата
+        context.user_data['video_image_prompt'] = text
+        context.user_data['mode'] = 'video_image_format_wait'
+
+        from keyboards.ai_video import get_video_format_keyboard
+        msg = await update.message.reply_text(
+            f"✅ <b>Промпт сохранён!</b>\n<i>{text[:100]}...</i>\n\n"
+            f"📐 <b>В каком формате сгенерировать видео?</b>",
+            reply_markup=get_video_format_keyboard(),
+            parse_mode='HTML'
+        )
+
+        # Запускаем таймер автовыбора 20 секунд
+        from handlers.callback_router import schedule_auto_video_format
+        import asyncio
+        asyncio.create_task(schedule_auto_video_format(update, context, text, msg.message_id))
+        return
+
     # =========================================================
     # 🧠 СТАНДАРТНЫЙ ЗАПРОС К AI
     # =========================================================

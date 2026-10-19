@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "extreme-polygon",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8765"],
+      "port": 8765,
+      "url": "http://localhost:8765/tests/extreme-testing-polygon-v2.html"
+    },
+    {
+      "name": "canon-test",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8766"],
+      "port": 8766,
+      "url": "http://localhost:8766/tests/canon-test.html"
+    }
+  ]
+}

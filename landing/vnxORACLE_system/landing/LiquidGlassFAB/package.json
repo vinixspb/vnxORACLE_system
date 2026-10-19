@@ -1,0 +1,45 @@
+{
+  "name": "@vnxoracle/liquid-glass-fab",
+  "version": "1.0.0",
+  "description": "Apple Vision Pro style floating action button with spring physics and glass morphism",
+  "main": "src/LiquidGlassFAB.js",
+  "type": "module",
+  "files": [
+    "src/",
+    "docs/",
+    "tests/"
+  ],
+  "keywords": [
+    "fab",
+    "floating-action-button",
+    "glass-morphism",
+    "spring-physics",
+    "animation",
+    "button",
+    "ui-component",
+    "vanilla-js",
+    "vision-pro",
+    "liquid",
+    "morphing"
+  ],
+  "author": "vnxORACLE",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vnxoracle/liquid-glass-fab.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vnxoracle/liquid-glass-fab/issues"
+  },
+  "homepage": "https://github.com/vnxoracle/liquid-glass-fab#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Open tests/canon-test.html in browser\" && exit 0"
+  },
+  "exports": {
+    ".": "./src/LiquidGlassFAB.js",
+    "./css": "./src/liquid-glass-fab.css"
+  }
+}

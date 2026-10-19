@@ -44,10 +44,109 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == "video_text": return await ask_video_prompt(update, context, "text")
     elif data == "video_image": return await ask_video_prompt(update, context, "image")
+
+    # 🎬 Обработка выбора видеомодели
+    elif data.startswith("video_model_"):
+        model_key = data.replace("video_model_", "")
+        from keyboards.ai_video import get_video_generation_keyboard, get_model_info_text
+
+        # Показываем информацию о модели и режимы генерации
+        model_info_text = get_model_info_text(model_key)
+        await _safe_menu_edit(query, context, model_info_text, get_video_generation_keyboard(model_key))
+
+    # 🎬 Text-to-Video с выбранной моделью
+    elif data.startswith("video_text_"):
+        model_key = data.replace("video_text_", "")
+        return await ask_video_prompt(update, context, "text", model_key)
+
+    # 🎬 Image-to-Video с выбранной моделью
+    elif data.startswith("video_image_") and not data in ["video_image_random", "video_image_custom", "video_image_cancel"]:
+        model_key = data.replace("video_image_", "")
+        return await ask_video_prompt(update, context, "image", model_key)
+
+    # 🎬 Выбор действия после загрузки фото
+    elif data == "video_image_random":
+        # Случайная генерация - выбираем случайный промпт
+        import random
+        random_prompts = [
+            "The person smiles and waves at the camera. Natural movement, static camera.",
+            "The person looks around curiously. Subtle head movement.",
+            "The person reacts with surprise. Natural facial expression.",
+            "The person makes a small gesture with their hand. Gentle motion.",
+            "The person performs a simple comedic action. Deadpan expression."
+        ]
+        prompt = random.choice(random_prompts)
+        context.user_data['video_image_prompt'] = prompt
+        context.user_data['mode'] = 'video_image_format_wait'
+
+        from keyboards.ai_video import get_video_format_keyboard
+        msg = await query.message.reply_text(
+            f"🎲 <b>Случайное действие выбрано:</b>\n<i>{prompt}</i>\n\n"
+            f"📐 <b>В каком формате сгенерировать видео?</b>",
+            reply_markup=get_video_format_keyboard(),
+            parse_mode='HTML'
+        )
+
+        # Запускаем таймер автовыбора 20 секунд (по образцу блока изображений)
+        import asyncio
+        asyncio.create_task(schedule_auto_video_format(update, context, prompt, msg.message_id))
+
+    elif data == "video_image_custom":
+        # Генерация по заданию пользователя
+        context.user_data['mode'] = 'video_image_custom_prompt_wait'
+        await query.message.reply_text(
+            "✍️ <b>Опишите, что должно происходить в видео.</b>\n\n"
+            "<i>Например: человек выглядывает из-за столба, смотрит налево и направо и быстро прячется обратно.</i>\n\n"
+            "Для отмены напишите <b>\"Отмена\"</b>.",
+            parse_mode='HTML'
+        )
+
+    elif data == "video_image_cancel":
+        # Отмена сценария Image-to-Video
+        context.user_data['mode'] = None
+        context.user_data.pop('video_image_path', None)
+        context.user_data.pop('video_image_prompt', None)
+
+        # Возврат к выбору режима генерации (Text/Image) для выбранной модели
+        model_key = context.user_data.get('video_model', 'seedance-2.0')
+        from keyboards.ai_video import get_video_generation_keyboard, get_model_info_text
+        model_info_text = get_model_info_text(model_key)
+        await _safe_menu_edit(query, context, model_info_text, get_video_generation_keyboard(model_key))
+
+    # 🎬 Выбор формата видео
+    elif data == "video_format_16_9":
+        context.user_data['video_aspect_ratio'] = "16:9"
+        context.user_data['mode'] = None  # Предотвращаем дубли от таймера
+        await start_video_generation_with_format(update, context, "16:9")
+
+    elif data == "video_format_9_16":
+        context.user_data['video_aspect_ratio'] = "9:16"
+        context.user_data['mode'] = None  # Предотвращаем дубли от таймера
+        await start_video_generation_with_format(update, context, "9:16")
+
+    elif data == "video_format_back":
+        # Возврат к выбору действия, сохраняя фото и промпт
+        context.user_data['mode'] = 'video_image_action_choice'
+        from keyboards.ai_video import get_video_image_action_keyboard
+        await _safe_menu_edit(query, context,
+            "🖼 <b>Фотография сохранена!</b>\n\n"
+            "Выберите, как оживить изображение:",
+            get_video_image_action_keyboard()
+        )
+
     elif data == "feature_video":
-        context.user_data['mode'] = None 
-        from keyboards.ai_video import get_video_menu_keyboard 
-        menu_text = "🎬 <b>Модуль Видео Ai (Kling 3.0 Motion)</b>\n\nВыберите способ генерации:\n📝 <b>По тексту</b> — Опишите сцену, и нейросеть создаст ролик с нуля.\n🖼 <b>По картинке</b> — Нейросеть 'оживит' готовую фотографию."
+        context.user_data['mode'] = None
+        from keyboards.ai_video import get_video_menu_keyboard
+        menu_text = (
+            "🎬 <b>Видео AI — 5 моделей для фильма</b>\n\n"
+            "Все модели поддерживают оживление фотографий (Image-to-Video) в 720p, 16:9.\n\n"
+            "⭐️ <b>Seedance 2.0</b> — Основной выбор. Баланс качества и цены.\n"
+            "🪙 <b>Seedance Mini</b> — Недорогие тесты промптов.\n"
+            "⚡️ <b>Seedance Fast</b> — Быстрые черновики.\n"
+            "💎 <b>Kling Pro</b> — Максимальное качество движения.\n"
+            "🎬 <b>Veo Fast</b> — Альтернатива с опциональным звуком.\n\n"
+            "👇 <i>Выберите модель для начала работы:</i>"
+        )
         await _safe_menu_edit(query, context, menu_text, get_video_menu_keyboard())
 
     elif data == "profile_tariffs":
@@ -299,3 +398,53 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try: await query.answer()
     except: pass
+
+# =========================================================
+# 🎬 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ВИДЕО
+# =========================================================
+
+async def schedule_auto_video_format(update: Update, context: ContextTypes.DEFAULT_TYPE, prompt: str, message_id: int):
+    """
+    Таймер автовыбора формата видео (20 секунд) по образцу блока изображений
+    """
+    import asyncio
+    await asyncio.sleep(20)
+
+    # Проверяем, что пользователь ещё не выбрал формат
+    if context.user_data.get('mode') == 'video_image_format_wait':
+        if context.user_data.get('video_image_prompt') == prompt:
+            context.user_data['mode'] = None  # Предотвращаем дубли
+
+            # Уведомление об автовыборе
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_user.id,
+                    message_id=message_id,
+                    text=f"⏱ Время истекло. Автовыбор: Вертикальный формат (9:16)\n\n<i>Промпт: {prompt}</i>",
+                    parse_mode='HTML'
+                )
+            except:
+                pass
+
+            # Запуск генерации с 9:16
+            context.user_data['video_aspect_ratio'] = "9:16"
+            await start_video_generation_with_format(update, context, "9:16")
+
+async def start_video_generation_with_format(update: Update, context: ContextTypes.DEFAULT_TYPE, aspect_ratio: str):
+    """
+    Запуск генерации видео с выбранным форматом
+    """
+    prompt = context.user_data.get('video_image_prompt')
+    image_path = context.user_data.get('video_image_path')
+
+    if not prompt or not image_path:
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="❌ Ошибка: промпт или фото потеряны. Начните заново.",
+            parse_mode='HTML'
+        )
+        return
+
+    # Вызываем функцию генерации из handlers/video.py
+    from handlers.video import handle_video_image_with_prompt_and_format
+    await handle_video_image_with_prompt_and_format(update, context, prompt, image_path, aspect_ratio)

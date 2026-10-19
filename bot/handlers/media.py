@@ -212,9 +212,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif mode == 'video_image_wait':
-        context.user_data['last_photo_path'] = path
-        context.user_data['last_photo_caption'] = caption
-        await update.message.reply_text(get_wait_message("video"), parse_mode='HTML')
+        # 🎬 Оживление фотографии через выбранную видеомодель
+        context.user_data['mode'] = None
+        from handlers.video import handle_video_image_request
+        await handle_video_image_request(update, context, path)
         return
 
     user_tariff = sheets_mgr.get_user_tariff(user_id)
