@@ -126,15 +126,31 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🎬 Выбор формата видео
     elif data == "video_format_16_9":
+        # Принимаем формат только один раз, из актуального состояния выбора.
+        if context.user_data.get('mode') != 'video_image_format_wait':
+            await query.answer("Этот выбор уже обработан.", show_alert=False)
+            return
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
         await query.answer("🎬 Запускаю генерацию…")
         context.user_data['video_aspect_ratio'] = "16:9"
-        context.user_data['mode'] = None  # Предотвращаем дубли от таймера
+        context.user_data['mode'] = None  # Блокирует повторное нажатие и таймер
         return await start_video_generation_with_format(update, context, "16:9")
 
     elif data == "video_format_9_16":
+        # Принимаем формат только один раз, из актуального состояния выбора.
+        if context.user_data.get('mode') != 'video_image_format_wait':
+            await query.answer("Этот выбор уже обработан.", show_alert=False)
+            return
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
         await query.answer("🎬 Запускаю генерацию…")
         context.user_data['video_aspect_ratio'] = "9:16"
-        context.user_data['mode'] = None  # Предотвращаем дубли от таймера
+        context.user_data['mode'] = None  # Блокирует повторное нажатие и таймер
         return await start_video_generation_with_format(update, context, "9:16")
 
     elif data == "video_format_back":
@@ -427,6 +443,17 @@ async def schedule_auto_video_format(update: Update, context: ContextTypes.DEFAU
     if context.user_data.get('mode') == 'video_image_format_wait':
         if context.user_data.get('video_image_prompt') == prompt:
             context.user_data['mode'] = None  # Предотвращаем дубли
+
+            # Сначала удаляем кнопки, чтобы таймер и пользователь не запустили
+            # генерацию повторно из одного и того же сообщения.
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=update.effective_user.id,
+                    message_id=message_id,
+                    reply_markup=None
+                )
+            except Exception:
+                pass
 
             # Уведомление об автовыборе
             try:
